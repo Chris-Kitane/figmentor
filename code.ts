@@ -165,16 +165,19 @@ function buildElementorNode(node: SceneNode): any {
       typography_typography: 'custom'
     };
 
-
-
     Object.assign(textSettings, getSharedItemSettings(node));
 
     if (Array.isArray(node.fills) && node.fills.length > 0 && node.fills[0].type === 'SOLID') {
       textSettings.title_color = rgbaToHex(node.fills[0].color);
     }
 
+    // Fixed: Keep font size as a raw number matching sample-layout.json signature
     if (node.fontSize && typeof node.fontSize === 'number') {
-      textSettings.typography_font_size = { size: node.fontSize.toString(), unit: 'px' };
+      textSettings.typography_font_size = {
+        size: node.fontSize,
+        unit: 'px',
+        sizes: []
+      };
     }
 
     if (node.fontName && typeof node.fontName !== 'symbol') {
@@ -187,7 +190,27 @@ function buildElementorNode(node: SceneNode): any {
       else textSettings.typography_font_weight = '400';
     }
 
+    // Fixed: Parse Line Height safely (Figma uses .unit, not .type!)
+    if (node.lineHeight && node.lineHeight.unit !== 'AUTO') {
+      if (node.lineHeight.unit === 'PIXELS') {
+        textSettings.typography_line_height = {
+          unit: 'px',
+          size: Math.round(node.lineHeight.value),
+          sizes: []
+        };
+      } else if (node.lineHeight.unit === 'PERCENT') {
+        // Convert Figma's percentage (e.g., 150%) to Elementor's native relative 'em' (e.g., 1.5em)
+        textSettings.typography_line_height = {
+          unit: 'em',
+          size: Number((node.lineHeight.value / 100).toFixed(2)),
+          sizes: []
+        };
+      }
+    }
+
+    // Default tag assignment baseline
     textSettings.header_size = 'h2';
+
     const headingMatch = nodeName.match(/\btext-(h[1-6])\b/);
     const isTextParagraph = /\btext-p\b/.test(nodeName) || /\btext-paragraph\b/.test(nodeName);
 
@@ -197,6 +220,7 @@ function buildElementorNode(node: SceneNode): any {
       textSettings.header_size = headingMatch[1];
     }
 
+    // Enforced rule: Always export text elements using Elementor's Heading Widget structure
     return {
       id,
       elType: 'widget',
@@ -325,7 +349,7 @@ function buildElementorNode(node: SceneNode): any {
 
     // Append layout configurations to container settings object
     if (isGrid) {
-      containerSettings.container_type = 'grid'; // Note: the sample JSON doesn't use "layout: grid"
+      containerSettings.container_type = 'grid';
 
       if (gridCols) {
         containerSettings.grid_columns_grid = { unit: 'fr', size: parseInt(gridCols), sizes: [] };
@@ -335,7 +359,6 @@ function buildElementorNode(node: SceneNode): any {
       const resolvedGridGapX = gridGapX || gap || '0';
       const resolvedGridGapY = gridGapY || gap || '0';
 
-      // The exact formatting pulled from your sample-layout.json
       containerSettings.grid_gaps = {
         unit: 'px',
         column: resolvedGridGapX,
@@ -348,9 +371,15 @@ function buildElementorNode(node: SceneNode): any {
       if (justifyContent) containerSettings.flex_justify_content = justifyContent;
       if (alignItems) containerSettings.flex_align_items = alignItems;
 
-      // Flex gaps (using elements_gap as it's the standard for Flex containers in newer Elementor)
+      // Fixed: Reverted to using flex_gap mapping syntax matching your Elementor JSON version
       if (gap) {
-        containerSettings.elements_gap = { column: gap, row: gap, isLinked: true, unit: 'px', size: parseInt(gap) };
+        containerSettings.flex_gap = {
+          column: gap,
+          row: gap,
+          isLinked: true,
+          unit: 'px',
+          size: parseInt(gap)
+        };
       }
     }
 
