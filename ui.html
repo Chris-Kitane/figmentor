@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <style>
+    /* Clean, modern typography and reset */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background-color: #ffffff;
+      color: #333333;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 48px);
+      box-sizing: border-box;
+    }
+
+    /* Header styling */
+    .header {
+      margin-bottom: auto;
+      /* Pushes everything below it to the bottom */
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: #111111;
+      letter-spacing: -0.5px;
+    }
+
+    p {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #666666;
+      margin: 0;
+    }
+
+    /* Modern button styling */
+    button {
+      width: 100%;
+      background-color: #92003B;
+      /* Elementor's signature brand color */
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      margin-top: 24px;
+    }
+
+    button:hover {
+      background-color: #70002D;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <h1>Elementor Exporter</h1>
+    <p>Select any frame or layout container on your canvas, then convert it instantly into clean Elementor JSON
+      structure.</p>
+  </div>
+
+  <button id="convert-btn">Convert to Elementor JSON</button>
+
+  <script>
+    document.getElementById('convert-btn').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'export' } }, '*');
+    }
+
+    // Listen for the background script giving us the clean JSON file
+    window.onmessage = (event) => {
+      const message = event.data.pluginMessage;
+      if (message && message.type === 'download') {
+        // Create a temporary hidden download link in the browser
+        const blob = new Blob([message.data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${message.filename}-elementor.json`;
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    }
+  </script>
+
+</body>
+
+</html>
