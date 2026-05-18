@@ -18,12 +18,26 @@ figma.ui.onmessage = msg => {
     const titleMatch = firstNodeName.match(/^\(([^)]+)\)/);
     const exportTitle = titleMatch ? titleMatch[1].trim() : firstNodeName.replace(/[\(\)]/g, '').split(/\s+/)[0].trim();
 
+    // Fix: Force-flatten the array mapping if a master artboard frame is selected
     if (selection.length === 1 && (selection[0].type === 'FRAME' || selection[0].type === 'COMPONENT' || selection[0].type === 'INSTANCE')) {
       const singleNode = selection[0];
       const nodeName = singleNode.name.toLowerCase();
 
-      if (nodeName.includes('page') || nodeName.includes('desktop') || nodeName.includes('artboard') || singleNode.layoutMode === 'NONE') {
-        topLevelElements = singleNode.children.map(buildElementorNode).filter(Boolean);
+      // If it's a wrapper, pull its children directly to form the root level elements array
+      if (
+        nodeName.includes('page') ||
+        nodeName.includes('desktop') ||
+        nodeName.includes('artboard') ||
+        nodeName.includes('frame') ||
+        singleNode.layoutMode === 'NONE'
+      ) {
+        topLevelElements = [];
+        singleNode.children.forEach(child => {
+          const parsedChild = buildElementorNode(child);
+          if (parsedChild) {
+            topLevelElements.push(parsedChild);
+          }
+        });
       } else {
         topLevelElements = [buildElementorNode(singleNode)].filter(Boolean);
       }
@@ -190,21 +204,24 @@ function buildElementorNode(node: SceneNode): any {
       else textSettings.typography_font_weight = '400';
     }
 
-    // Fixed: Parse Line Height safely (Figma uses .unit, not .type!)
-    if (node.lineHeight && node.lineHeight.unit !== 'AUTO') {
-      if (node.lineHeight.unit === 'PIXELS') {
-        textSettings.typography_line_height = {
-          unit: 'px',
-          size: Math.round(node.lineHeight.value),
-          sizes: []
-        };
-      } else if (node.lineHeight.unit === 'PERCENT') {
-        // Convert Figma's percentage (e.g., 150%) to Elementor's native relative 'em' (e.g., 1.5em)
-        textSettings.typography_line_height = {
-          unit: 'em',
-          size: Number((node.lineHeight.value / 100).toFixed(2)),
-          sizes: []
-        };
+    // Fixed: Added safety checks and type assertions to cleanly resolve TypeScript symbol restrictions
+    if (node.lineHeight && node.lineHeight !== figma.mixed) {
+      const lh = node.lineHeight as any;
+      if (lh.unit !== 'AUTO') {
+        if (lh.unit === 'PIXELS') {
+          textSettings.typography_line_height = {
+            unit: 'px',
+            size: Math.round(lh.value),
+            sizes: []
+          };
+        } else if (lh.unit === 'PERCENT') {
+          // Convert Figma's percentage (e.g., 150%) to Elementor's native relative 'em' (e.g., 1.5em)
+          textSettings.typography_line_height = {
+            unit: 'em',
+            size: Number((lh.value / 100).toFixed(2)),
+            sizes: []
+          };
+        }
       }
     }
 
@@ -226,6 +243,96 @@ function buildElementorNode(node: SceneNode): any {
       elType: 'widget',
       widgetType: 'heading',
       settings: textSettings,
+      elements: []
+    };
+  }
+
+
+
+  // -------------------------------------------------------------
+  // TYPE B.5: ICON LIST WIDGETS
+  // -------------------------------------------------------------
+  if (nodeName.includes('icon-list') && (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE')) {
+    const listSettings: any = {
+      _element_width: 'max-content', // Forces widget width to max-content as requested
+      icon_list: [],
+      typography_typography: 'custom' // Activates the custom typography panel override switch
+    };
+
+    let iconSize = 16; // Fallback size
+    let textColor = '';
+
+    // Default Elementor list item placeholder
+    const listItem: any = {
+      text: '',
+      selected_icon: { value: 'fas fa-check', library: 'fa-solid' }
+    };
+
+    // Scan the children inside the icon-list frame
+    if ('children' in node) {
+      node.children.forEach(child => {
+        const childName = child.name.toLowerCase();
+
+        // 1. Extract Text & Typography Settings (Fixed prefix keys)
+        if (child.type === 'TEXT') {
+          listItem.text = child.characters;
+
+          if (Array.isArray(child.fills) && child.fills.length > 0 && child.fills[0].type === 'SOLID') {
+            textColor = rgbaToHex(child.fills[0].color);
+          }
+
+          if (child.fontSize && typeof child.fontSize === 'number') {
+            listSettings.typography_font_size = { size: child.fontSize, unit: 'px', sizes: [] };
+          }
+
+          if (child.fontName && typeof child.fontName !== 'symbol') {
+            listSettings.typography_font_family = child.fontName.family;
+            const style = child.fontName.style.toLowerCase();
+            if (style.includes('bold')) listSettings.typography_font_weight = '700';
+            else if (style.includes('medium')) listSettings.typography_font_weight = '500';
+            else if (style.includes('semibold')) listSettings.typography_font_weight = '600';
+            else if (style.includes('light')) listSettings.typography_font_weight = '300';
+            else listSettings.typography_font_weight = '400';
+          }
+
+          // Apply our safe Line Height system with symbol assertions
+          if (child.lineHeight && child.lineHeight !== figma.mixed) {
+            const clh = child.lineHeight as any;
+            if (clh.unit !== 'AUTO') {
+              if (clh.unit === 'PIXELS') {
+                listSettings.typography_line_height = { unit: 'px', size: Math.round(clh.value), sizes: [] };
+              } else if (clh.unit === 'PERCENT') {
+                listSettings.typography_line_height = { unit: 'em', size: Number((clh.value / 100).toFixed(2)), sizes: [] };
+              }
+            }
+          }
+        }
+
+        // 2. Extract Icon Dimensions
+        else if (childName.includes('icon') || child.type === 'VECTOR' || child.type === 'INSTANCE') {
+          // Grab the largest dimension to ensure the icon is perfectly squared/scaled
+          iconSize = Math.max(child.width, child.height);
+
+          // Try to extract the icon color if it is a flat vector blueprints layer
+          if ('fills' in child && Array.isArray(child.fills) && child.fills.length > 0 && child.fills[0].type === 'SOLID') {
+            listSettings.icon_color = rgbaToHex(child.fills[0].color);
+          }
+        }
+      });
+    }
+
+    // Assign collected values back to configuration objects
+    listSettings.icon_list.push(listItem);
+    listSettings.icon_size = { size: Math.round(iconSize), unit: 'px', sizes: [] };
+    if (textColor) listSettings.text_color = textColor;
+
+    Object.assign(listSettings, getSharedItemSettings(node));
+
+    return {
+      id,
+      elType: 'widget',
+      widgetType: 'icon-list',
+      settings: listSettings,
       elements: []
     };
   }
