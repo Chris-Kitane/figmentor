@@ -1,9 +1,12 @@
 // This shows the HTML page in "ui.html".
-figma.showUI(__html__, { width: 300, height: 200 });
+figma.showUI(__html__, { width: 660, height: 680 });
 
 // This waits for the UI window to send a message (like clicking our button)
 figma.ui.onmessage = msg => {
-  if (msg.type === 'export') {
+  // ---------------------------------------------------------------
+  // PREVIEW: Walk selection, collect stats + tree, send to UI
+  // ---------------------------------------------------------------
+  if (msg.type === 'preview') {
     const selection = figma.currentPage.selection;
 
     if (selection.length === 0) {
@@ -11,19 +14,25 @@ figma.ui.onmessage = msg => {
       return;
     }
 
-    let topLevelElements: any[] = [];
-
-    // Clean up the template title completely by removing the "(Label)" block
     const firstNodeName = selection[0].name;
     const titleMatch = firstNodeName.match(/^\(([^)]+)\)/);
-    const exportTitle = titleMatch ? titleMatch[1].trim() : firstNodeName.replace(/[\(\)]/g, '').split(/\s+/)[0].trim();
+    const exportTitle = titleMatch
+      ? titleMatch[1].trim()
+      : firstNodeName.replace(/[\(\)]/g, '').split(/\s+/)[0].trim();
 
-    // Fix: Force-flatten the array mapping if a master artboard frame is selected
-    if (selection.length === 1 && (selection[0].type === 'FRAME' || selection[0].type === 'COMPONENT' || selection[0].type === 'INSTANCE')) {
-      const singleNode = selection[0];
+    const stats = { sections: 0, containers: 0, headings: 0, images: 0, iconLists: 0 };
+    const invisibleNodes: string[] = [];
+    const unsupportedTypes = new Set<string>();
+    const tree: any[] = [];
+
+    let nodesToProcess: SceneNode[] = [];
+
+    if (
+      selection.length === 1 &&
+      (selection[0].type === 'FRAME' || selection[0].type === 'COMPONENT' || selection[0].type === 'INSTANCE')
+    ) {
+      const singleNode = selection[0] as FrameNode | ComponentNode | InstanceNode;
       const nodeName = singleNode.name.toLowerCase();
-
-      // If it's a wrapper, pull its children directly to form the root level elements array
       if (
         nodeName.includes('page') ||
         nodeName.includes('desktop') ||
@@ -31,36 +40,119 @@ figma.ui.onmessage = msg => {
         nodeName.includes('frame') ||
         singleNode.layoutMode === 'NONE'
       ) {
-        topLevelElements = [];
-        singleNode.children.forEach(child => {
-          const parsedChild = buildElementorNode(child);
-          if (parsedChild) {
-            topLevelElements.push(parsedChild);
-          }
-        });
+        nodesToProcess = [...singleNode.children] as SceneNode[];
       } else {
-        topLevelElements = [buildElementorNode(singleNode)].filter(Boolean);
+        nodesToProcess = [singleNode];
       }
     } else {
-      topLevelElements = selection.map(node => buildElementorNode(node as SceneNode)).filter(Boolean);
+      nodesToProcess = [...selection] as SceneNode[];
     }
 
-    const exportData = {
-      version: "0.4",
-      title: exportTitle, // Completely clean title
-      type: "page",
-      content: topLevelElements
-    };
+    for (const node of nodesToProcess) {
+      stats.sections++;
+      const labelMatch = node.name.match(/^\(([^)]+)\)/);
+      const sectionLabel = labelMatch ? labelMatch[1].trim() : node.name;
+      const sectionChildren = getPreviewChildren(node, stats, invisibleNodes, unsupportedTypes);
+      tree.push({
+        label: sectionLabel,
+        childCount: sectionChildren.length,
+        children: sectionChildren
+      });
+    }
 
+    const warnings: string[] = [];
+    if (invisibleNodes.length > 0) {
+      warnings.push(`${invisibleNodes.length} hidden node${invisibleNodes.length > 1 ? 's' : ''} skipped`);
+    }
+    if (unsupportedTypes.size > 0) {
+      warnings.push(`Unsupported layer types skipped: ${[...unsupportedTypes].join(', ')}`);
+    }
+
+    figma.ui.postMessage({ type: 'preview', title: exportTitle, stats, warnings, tree });
+    return;
+  }
+
+  // ---------------------------------------------------------------
+  // EXPORT: Build full JSON and download
+  // ---------------------------------------------------------------
+  if (msg.type === 'export') {
+    const result = buildExportPayload();
+    if (!result) return;
     figma.ui.postMessage({
       type: 'download',
-      data: JSON.stringify(exportData, null, 2),
-      filename: exportTitle // Completely clean filename
+      data: JSON.stringify(result.data, null, 2),
+      filename: result.title
     });
+    return;
+  }
+
+  // ---------------------------------------------------------------
+  // RENDER: Build full JSON and send to UI for CSS rendering
+  // ---------------------------------------------------------------
+  if (msg.type === 'render') {
+    const result = buildExportPayload();
+    if (!result) return;
+    figma.ui.postMessage({
+      type: 'render-data',
+      data: JSON.stringify(result.data),
+      title: result.title
+    });
+    return;
   }
 };
 
 
+// ---------------------------------------------------------------
+// Shared: build the full Elementor export payload from selection
+// ---------------------------------------------------------------
+function buildExportPayload(): { title: string; data: any } | null {
+  const selection = figma.currentPage.selection;
+
+  if (selection.length === 0) {
+    figma.notify('Please select a frame or element on the canvas first!');
+    return null;
+  }
+
+  let topLevelElements: any[] = [];
+
+  const firstNodeName = selection[0].name;
+  const titleMatch = firstNodeName.match(/^\(([^)]+)\)/);
+  const exportTitle = titleMatch
+    ? titleMatch[1].trim()
+    : firstNodeName.replace(/[\(\)]/g, '').split(/\s+/)[0].trim();
+
+  if (
+    selection.length === 1 &&
+    (selection[0].type === 'FRAME' || selection[0].type === 'COMPONENT' || selection[0].type === 'INSTANCE')
+  ) {
+    const singleNode = selection[0];
+    const nodeName = singleNode.name.toLowerCase();
+
+    if (
+      nodeName.includes('page') ||
+      nodeName.includes('desktop') ||
+      nodeName.includes('artboard') ||
+      nodeName.includes('frame') ||
+      singleNode.layoutMode === 'NONE'
+    ) {
+      singleNode.children.forEach(child => {
+        const parsed = buildElementorNode(child as SceneNode, true);
+        if (parsed) topLevelElements.push(parsed);
+      });
+    } else {
+      topLevelElements = [buildElementorNode(singleNode, true)].filter(Boolean);
+    }
+  } else {
+    topLevelElements = selection
+      .map(node => buildElementorNode(node as SceneNode, true))
+      .filter(Boolean);
+  }
+
+  return {
+    title: exportTitle,
+    data: { version: '0.4', title: exportTitle, type: 'page', content: topLevelElements }
+  };
+}
 
 // Generates a random, unique 7-character ID string for Elementor elements
 function generateId(): string {
@@ -75,11 +167,26 @@ function rgbaToHex(color: RGB | RGBA): string {
   return `#${r}${g}${b}`;
 }
 
+// NEW: Radix UI-inspired fluid typography scale
+function getResponsiveTypography(desktopSize: number) {
+  let tabletSize = desktopSize;
+  let mobileSize = desktopSize;
+
+  if (desktopSize >= 60) { tabletSize = 48; mobileSize = 40; }
+  else if (desktopSize >= 48) { tabletSize = 40; mobileSize = 32; }
+  else if (desktopSize >= 36) { tabletSize = 32; mobileSize = 28; }
+  else if (desktopSize >= 24) { tabletSize = 22; mobileSize = 20; }
+  else if (desktopSize >= 20) { tabletSize = 18; mobileSize = 18; }
+  else if (desktopSize >= 18) { tabletSize = 18; mobileSize = 16; }
+  else if (desktopSize >= 16) { tabletSize = 16; mobileSize = 16; }
+
+  return { tabletSize, mobileSize };
+}
+
 // Extracts layout properties (like absolute positioning) from a Figma node
 function getSharedItemSettings(node: SceneNode): any {
   const settings: any = {};
 
-  // Check if the item is explicitly set to Absolute Position in Figma
   if ('layoutPositioning' in node && node.layoutPositioning === 'ABSOLUTE') {
     settings._position = 'absolute';
     settings._offset_x = { size: node.x, unit: 'px' };
@@ -88,7 +195,6 @@ function getSharedItemSettings(node: SceneNode): any {
     settings._offset_orientation_v = 'start';
   }
 
-  // Check if the item is span-configured inside a Grid layout
   if ('gridColumnSpan' in node && typeof (node as any).gridColumnSpan === 'number') {
     const span = (node as any).gridColumnSpan;
     if (span >= 1 && span <= 12) {
@@ -112,18 +218,101 @@ function getSharedItemSettings(node: SceneNode): any {
   return settings;
 }
 
-// The main brain: Turns a Figma layer into an Elementor JSON object
-function buildElementorNode(node: SceneNode): any {
+// ---------------------------------------------------------------
+// Preview-only helpers: lightweight tree walk, no Elementor JSON built
+// ---------------------------------------------------------------
+
+// Maximum nesting depth for the preview tree (protects against pathologically deep designs)
+const MAX_PREVIEW_DEPTH = 8;
+
+function getPreviewChildren(
+  node: SceneNode,
+  stats: any,
+  invisibleNodes: string[],
+  unsupportedTypes: Set<string>,
+  depth: number = 0
+): any[] {
+  if (!('children' in node)) return [];
+  return (node.children as SceneNode[])
+    .map(child => getPreviewItem(child, stats, invisibleNodes, unsupportedTypes, depth))
+    .filter(Boolean);
+}
+
+function getPreviewItem(
+  node: SceneNode,
+  stats: any,
+  invisibleNodes: string[],
+  unsupportedTypes: Set<string>,
+  depth: number = 0
+): any | null {
+  if (node.visible === false) {
+    invisibleNodes.push(node.name);
+    return null;
+  }
+
+  const nodeName = node.name.toLowerCase();
+
+  // Image / shape
+  if (
+    nodeName.startsWith('el-image') ||
+    nodeName.includes('one image') ||
+    node.type === 'RECTANGLE' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'VECTOR'
+  ) {
+    stats.images++;
+    return { type: 'image', label: node.name };
+  }
+
+  // Text
+  if (node.type === 'TEXT') {
+    stats.headings++;
+    const text = (node as TextNode).characters;
+    return { type: 'heading', label: text.length > 40 ? text.slice(0, 40) + '\u2026' : text };
+  }
+
+  // Icon list
+  if (
+    nodeName.includes('icon-list') &&
+    (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE')
+  ) {
+    stats.iconLists++;
+    return { type: 'icon-list', label: node.name };
+  }
+
+  // Container (Frame / Component / Instance) — recurse up to MAX_PREVIEW_DEPTH
+  if (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE') {
+    stats.containers++;
+    const labelMatch = node.name.match(/^\(([^)]+)\)/);
+    const label = labelMatch ? labelMatch[1].trim() : node.name;
+
+    if (depth < MAX_PREVIEW_DEPTH) {
+      const children = getPreviewChildren(node, stats, invisibleNodes, unsupportedTypes, depth + 1);
+      return { type: 'container', label, childCount: children.length, children };
+    }
+
+    // At max depth: report count but don't recurse further
+    const childCount = 'children' in node
+      ? (node as FrameNode).children.filter(c => c.visible !== false).length
+      : 0;
+    return { type: 'container', label, childCount, children: [] };
+  }
+
+  // Unsupported type — log and skip
+  unsupportedTypes.add(node.type);
+  return null;
+}
+
+// The main brain: Turns a Figma layer into an Elementor JSON object.
+function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
   if (node.visible === false) return null;
 
   const id = generateId();
   const nodeName = node.name.toLowerCase();
 
-  // 1. Clean extraction of optional section label from parentheses
   const labelMatch = node.name.match(/^\(([^)]+)\)/);
   const sectionLabel = labelMatch ? labelMatch[1].trim() : '';
 
-  // 2. Strip the label from the string so we only parse the layout classes left over
   let tokenSource = nodeName;
   if (labelMatch) {
     tokenSource = nodeName.slice(labelMatch[0].length).replace(/^[\)\s]+/, '');
@@ -161,13 +350,7 @@ function buildElementorNode(node: SceneNode): any {
       }
     });
 
-    return {
-      id,
-      elType: 'widget',
-      widgetType: 'image',
-      settings: imageSettings,
-      elements: []
-    };
+    return { id, elType: 'widget', widgetType: 'image', settings: imageSettings, elements: [] };
   }
 
   // -------------------------------------------------------------
@@ -185,13 +368,20 @@ function buildElementorNode(node: SceneNode): any {
       textSettings.title_color = rgbaToHex(node.fills[0].color);
     }
 
-    // Fixed: Keep font size as a raw number matching sample-layout.json signature
+    let desktopSize = 16;
+    let tabletSize = 16;
+    let mobileSize = 16;
+
+    // Apply Responsive Radix Typography Scaling
     if (node.fontSize && typeof node.fontSize === 'number') {
-      textSettings.typography_font_size = {
-        size: node.fontSize,
-        unit: 'px',
-        sizes: []
-      };
+      desktopSize = node.fontSize;
+      const respSizes = getResponsiveTypography(desktopSize);
+      tabletSize = respSizes.tabletSize;
+      mobileSize = respSizes.mobileSize;
+
+      textSettings.typography_font_size = { size: desktopSize, unit: 'px', sizes: [] };
+      if (tabletSize !== desktopSize) textSettings.typography_font_size_tablet = { size: tabletSize, unit: 'px', sizes: [] };
+      if (mobileSize !== desktopSize) textSettings.typography_font_size_mobile = { size: mobileSize, unit: 'px', sizes: [] };
     }
 
     if (node.fontName && typeof node.fontName !== 'symbol') {
@@ -204,28 +394,28 @@ function buildElementorNode(node: SceneNode): any {
       else textSettings.typography_font_weight = '400';
     }
 
-    // Fixed: Added safety checks and type assertions to cleanly resolve TypeScript symbol restrictions
+    // Apply Responsive Line Height
     if (node.lineHeight && node.lineHeight !== figma.mixed) {
       const lh = node.lineHeight as any;
       if (lh.unit !== 'AUTO') {
         if (lh.unit === 'PIXELS') {
-          textSettings.typography_line_height = {
-            unit: 'px',
-            size: Math.round(lh.value),
-            sizes: []
-          };
+          const desktopLH = Math.round(lh.value);
+          textSettings.typography_line_height = { unit: 'px', size: desktopLH, sizes: [] };
+
+          if (desktopSize > 0) {
+            const tabletLH = Math.round(desktopLH * (tabletSize / desktopSize));
+            const mobileLH = Math.round(desktopLH * (mobileSize / desktopSize));
+
+            if (tabletLH !== desktopLH) textSettings.typography_line_height_tablet = { unit: 'px', size: tabletLH, sizes: [] };
+            if (mobileLH !== desktopLH) textSettings.typography_line_height_mobile = { unit: 'px', size: mobileLH, sizes: [] };
+          }
         } else if (lh.unit === 'PERCENT') {
-          // Convert Figma's percentage (e.g., 150%) to Elementor's native relative 'em' (e.g., 1.5em)
-          textSettings.typography_line_height = {
-            unit: 'em',
-            size: Number((lh.value / 100).toFixed(2)),
-            sizes: []
-          };
+          // Relative EM sizes natively shift with font sizes without explicit tablet/mobile keys needed!
+          textSettings.typography_line_height = { unit: 'em', size: Number((lh.value / 100).toFixed(2)), sizes: [] };
         }
       }
     }
 
-    // Default tag assignment baseline
     textSettings.header_size = 'h2';
 
     const headingMatch = nodeName.match(/\btext-(h[1-6])\b/);
@@ -237,43 +427,37 @@ function buildElementorNode(node: SceneNode): any {
       textSettings.header_size = headingMatch[1];
     }
 
-    // Enforced rule: Always export text elements using Elementor's Heading Widget structure
-    return {
-      id,
-      elType: 'widget',
-      widgetType: 'heading',
-      settings: textSettings,
-      elements: []
-    };
+    return { id, elType: 'widget', widgetType: 'heading', settings: textSettings, elements: [] };
   }
-
-
 
   // -------------------------------------------------------------
   // TYPE B.5: ICON LIST WIDGETS
   // -------------------------------------------------------------
   if (nodeName.includes('icon-list') && (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE')) {
+
+    const determinedWidth = nodeName.includes('w-fit') ? 'initial' : 'inherit';
+
     const listSettings: any = {
-      _element_width: 'max-content', // Forces widget width to max-content as requested
+      _element_width: determinedWidth,
       icon_list: [],
-      typography_typography: 'custom' // Activates the custom typography panel override switch
+      typography_typography: 'custom',
+      icon_self_align: 'flex-start',
+      icon_vertical_align: 'top',
+      vertical_align: 'top'
     };
 
-    let iconSize = 16; // Fallback size
+    let iconSize = 16;
     let textColor = '';
 
-    // Default Elementor list item placeholder
     const listItem: any = {
       text: '',
       selected_icon: { value: 'fas fa-check', library: 'fa-solid' }
     };
 
-    // Scan the children inside the icon-list frame
     if ('children' in node) {
       node.children.forEach(child => {
         const childName = child.name.toLowerCase();
 
-        // 1. Extract Text & Typography Settings (Fixed prefix keys)
         if (child.type === 'TEXT') {
           listItem.text = child.characters;
 
@@ -281,8 +465,20 @@ function buildElementorNode(node: SceneNode): any {
             textColor = rgbaToHex(child.fills[0].color);
           }
 
+          let desktopSize = 16;
+          let tabletSize = 16;
+          let mobileSize = 16;
+
+          // Apply Responsive Radix Typography Scaling
           if (child.fontSize && typeof child.fontSize === 'number') {
-            listSettings.typography_font_size = { size: child.fontSize, unit: 'px', sizes: [] };
+            desktopSize = child.fontSize;
+            const respSizes = getResponsiveTypography(desktopSize);
+            tabletSize = respSizes.tabletSize;
+            mobileSize = respSizes.mobileSize;
+
+            listSettings.typography_font_size = { size: desktopSize, unit: 'px', sizes: [] };
+            if (tabletSize !== desktopSize) listSettings.typography_font_size_tablet = { size: tabletSize, unit: 'px', sizes: [] };
+            if (mobileSize !== desktopSize) listSettings.typography_font_size_mobile = { size: mobileSize, unit: 'px', sizes: [] };
           }
 
           if (child.fontName && typeof child.fontName !== 'symbol') {
@@ -295,25 +491,30 @@ function buildElementorNode(node: SceneNode): any {
             else listSettings.typography_font_weight = '400';
           }
 
-          // Apply our safe Line Height system with symbol assertions
+          // Apply Responsive Line Height
           if (child.lineHeight && child.lineHeight !== figma.mixed) {
             const clh = child.lineHeight as any;
             if (clh.unit !== 'AUTO') {
               if (clh.unit === 'PIXELS') {
-                listSettings.typography_line_height = { unit: 'px', size: Math.round(clh.value), sizes: [] };
+                const desktopLH = Math.round(clh.value);
+                listSettings.typography_line_height = { unit: 'px', size: desktopLH, sizes: [] };
+
+                if (desktopSize > 0) {
+                  const tabletLH = Math.round(desktopLH * (tabletSize / desktopSize));
+                  const mobileLH = Math.round(desktopLH * (mobileSize / desktopSize));
+
+                  if (tabletLH !== desktopLH) listSettings.typography_line_height_tablet = { unit: 'px', size: tabletLH, sizes: [] };
+                  if (mobileLH !== desktopLH) listSettings.typography_line_height_mobile = { unit: 'px', size: mobileLH, sizes: [] };
+                }
               } else if (clh.unit === 'PERCENT') {
                 listSettings.typography_line_height = { unit: 'em', size: Number((clh.value / 100).toFixed(2)), sizes: [] };
               }
             }
           }
         }
-
-        // 2. Extract Icon Dimensions
         else if (childName.includes('icon') || child.type === 'VECTOR' || child.type === 'INSTANCE') {
-          // Grab the largest dimension to ensure the icon is perfectly squared/scaled
           iconSize = Math.max(child.width, child.height);
 
-          // Try to extract the icon color if it is a flat vector blueprints layer
           if ('fills' in child && Array.isArray(child.fills) && child.fills.length > 0 && child.fills[0].type === 'SOLID') {
             listSettings.icon_color = rgbaToHex(child.fills[0].color);
           }
@@ -321,48 +522,43 @@ function buildElementorNode(node: SceneNode): any {
       });
     }
 
-    // Assign collected values back to configuration objects
     listSettings.icon_list.push(listItem);
     listSettings.icon_size = { size: Math.round(iconSize), unit: 'px', sizes: [] };
     if (textColor) listSettings.text_color = textColor;
 
     Object.assign(listSettings, getSharedItemSettings(node));
 
-    return {
-      id,
-      elType: 'widget',
-      widgetType: 'icon-list',
-      settings: listSettings,
-      elements: []
-    };
+    return { id, elType: 'widget', widgetType: 'icon-list', settings: listSettings, elements: [] };
   }
 
   // -------------------------------------------------------------
   // TYPE C: CONTAINERS (Frames, Components, and Instances)
   // -------------------------------------------------------------
   if (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE') {
-    const children = node.children.map(buildElementorNode).filter(Boolean);
+    // FLAG: FALSE (Children inside a container are Inner Items, not Sections!)
+    const children = node.children.map(child => buildElementorNode(child as SceneNode, false)).filter(Boolean);
 
     let flexDirection = '';
     let justifyContent = '';
     let alignItems = '';
     let gap = '';
+
+    // Setting up responsive padding slots
     let padding: any = null;
+    let paddingTablet: any = null;
+    let paddingMobile: any = null;
+
     let backgroundColor = '';
     let borderRadius: any = null;
-
-    // Default Container Sizing layout
     let contentWidth = 'full';
     let boxedWidth = '';
 
-    // Initialize layout flags and variables upfront!
     let isGrid = false;
     let gridCols = '';
     let gridRows = '';
     let gridGapX = '';
     let gridGapY = '';
 
-    // 1. RUN THE NATIVE INSPECTOR FIRST (Sets up our baselines)
     if ('layoutMode' in node && (node as any).layoutMode === 'GRID') {
       isGrid = true;
       if ('gridColumnCount' in node) gridCols = (node as any).gridColumnCount.toString();
@@ -379,7 +575,6 @@ function buildElementorNode(node: SceneNode): any {
       gap = node.itemSpacing.toString();
     }
 
-    // 2. RUN THE OVERRIDE TOKEN PARSER SECOND (Tokens Over Design Properties!)
     tokens.forEach(token => {
       if (token === 'w-full') {
         contentWidth = 'full';
@@ -396,18 +591,14 @@ function buildElementorNode(node: SceneNode): any {
 
       const colMatch = token.match(/^col-(\d+)$/);
       if (colMatch) gridCols = colMatch[1];
-
       const rowMatch = token.match(/^rows-(\d+)$/);
       if (rowMatch) gridRows = rowMatch[1];
-
       const gapXMatch = token.match(/^gap-x-(\d+)$/);
       if (gapXMatch) gridGapX = gapXMatch[1];
-
       const gapYMatch = token.match(/^gap-y-(\d+)$/);
       if (gapYMatch) gridGapY = gapYMatch[1];
     });
 
-    // 3. EXTRACT VISUAL STYLES (Fills, Padding, Corners)
     if ('fills' in node && Array.isArray(node.fills)) {
       const solidFill = node.fills.find((f: any) => f.type === 'SOLID' && f.visible !== false);
       if (solidFill) {
@@ -424,6 +615,9 @@ function buildElementorNode(node: SceneNode): any {
       };
     }
 
+    // -----------------------------------------------------------------
+    // PADDING EXTRACTION & RESPONSIVE RULES
+    // -----------------------------------------------------------------
     if (node.layoutMode !== 'NONE' || isGrid) {
       const pTop = node.paddingTop.toString();
       const pRight = node.paddingRight.toString();
@@ -435,67 +629,87 @@ function buildElementorNode(node: SceneNode): any {
         top: pTop, right: pRight, bottom: pBottom, left: pLeft,
         isLinked: pTop === pRight && pRight === pBottom && pBottom === pLeft
       };
+
+      // Apply 48px/16px rules ONLY to major sections!
+      if (isTopLevel) {
+        paddingTablet = {
+          unit: 'px',
+          top: pTop, right: '48', bottom: pBottom, left: '48',
+          isLinked: false
+        };
+
+        paddingMobile = {
+          unit: 'px',
+          top: pTop, right: '16', bottom: pBottom, left: '16',
+          isLinked: false
+        };
+      }
     }
 
-    // 4. MAP GATHERED VARIABLES TO ELEMENTOR STRUCTURE
     const containerSettings: any = {
       content_width: contentWidth
     };
 
     if (sectionLabel) containerSettings._title = sectionLabel;
-
-    if (boxedWidth) {
-      containerSettings.boxed_width = {
-        unit: 'px',
-        size: parseInt(boxedWidth),
-        sizes: []
-      };
-    }
+    if (boxedWidth) containerSettings.boxed_width = { unit: 'px', size: parseInt(boxedWidth), sizes: [] };
 
     Object.assign(containerSettings, getSharedItemSettings(node));
 
-    // Append layout configurations to container settings object
     if (isGrid) {
       containerSettings.container_type = 'grid';
-
-      if (gridCols) {
-        containerSettings.grid_columns_grid = { unit: 'fr', size: parseInt(gridCols), sizes: [] };
-      }
+      if (gridCols) containerSettings.grid_columns_grid = { unit: 'fr', size: parseInt(gridCols), sizes: [] };
       containerSettings.grid_rows_grid = { unit: 'fr', size: parseInt(gridRows || '1'), sizes: [] };
 
       const resolvedGridGapX = gridGapX || gap || '0';
       const resolvedGridGapY = gridGapY || gap || '0';
 
       containerSettings.grid_gaps = {
-        unit: 'px',
-        column: resolvedGridGapX,
-        row: resolvedGridGapY,
+        unit: 'px', column: resolvedGridGapX, row: resolvedGridGapY,
         isLinked: resolvedGridGapX === resolvedGridGapY
       };
-
     } else {
       if (flexDirection) containerSettings.flex_direction = flexDirection;
       if (justifyContent) containerSettings.flex_justify_content = justifyContent;
       if (alignItems) containerSettings.flex_align_items = alignItems;
-
-      // Fixed: Reverted to using flex_gap mapping syntax matching your Elementor JSON version
       if (gap) {
-        containerSettings.flex_gap = {
-          column: gap,
-          row: gap,
-          isLinked: true,
-          unit: 'px',
-          size: parseInt(gap)
-        };
+        containerSettings.flex_gap = { column: gap, row: gap, isLinked: true, unit: 'px', size: parseInt(gap) };
       }
     }
 
+    // Attach all Standard and Responsive Paddings
     if (padding) containerSettings.padding = padding;
+    if (paddingTablet) containerSettings.padding_tablet = paddingTablet;
+    if (paddingMobile) containerSettings.padding_mobile = paddingMobile;
+
     if (backgroundColor) {
       containerSettings.background_background = 'classic';
       containerSettings.background_color = backgroundColor;
     }
     if (borderRadius) containerSettings.border_radius = borderRadius;
+
+    // -----------------------------------------------------------------
+    // HEIGHT → min_height
+    // Map a Figma fixed height to Elementor's min_height so sections
+    // keep their designed height (e.g. hero at 600px).
+    // Fires when:
+    //   • Auto-layout frame with layoutSizingVertical === 'FIXED'
+    //   • Non-auto-layout frame (layoutMode === 'NONE') — always explicit
+    // Skipped for HUG and FILL modes (content-driven height).
+    // -----------------------------------------------------------------
+    if (node.height > 0) {
+      const isFixedHeight =
+        node.layoutMode === 'NONE' ||
+        ('layoutSizingVertical' in node &&
+          (node as FrameNode).layoutSizingVertical === 'FIXED');
+
+      if (isFixedHeight) {
+        containerSettings.min_height = {
+          unit: 'px',
+          size: Math.round(node.height),
+          sizes: []
+        };
+      }
+    }
 
     return {
       id,
