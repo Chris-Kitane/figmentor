@@ -874,7 +874,6 @@
     <div class="action-bar">
       <button class="btn btn-reanalyze" id="reanalyze-btn-bottom">← Back</button>
       <button class="btn btn-render" id="render-btn">👁 Preview</button>
-      <button class="btn btn-export" id="n8n-btn" style="background: #E83E8C; display: none;">Webhook</button>
       <button class="btn btn-export" id="export-btn">Download →</button>
     </div>
 
@@ -931,13 +930,6 @@
       parent.postMessage({ pluginMessage: { type: 'export' } }, '*');
     };
 
-    document.getElementById('n8n-btn').onclick = () => {
-      const originalText = document.getElementById('n8n-btn').textContent;
-      document.getElementById('n8n-btn').textContent = 'Sending...';
-      parent.postMessage({ pluginMessage: { type: 'webhook' } }, '*');
-      setTimeout(() => { document.getElementById('n8n-btn').textContent = originalText; }, 1000);
-    };
-
     document.getElementById('render-btn').onclick = () => {
       showLoading('Building layout preview…');
       parent.postMessage({ pluginMessage: { type: 'render' } }, '*');
@@ -982,22 +974,6 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      } else if (msg.type === 'webhook-send') {
-        fetch('https://train-drums-verse-elvis.trycloudflare.com/webhook-test/caf02fc3-9c6e-4f05-b14d-bcec9bd23622', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: msg.content
-        })
-          .then(res => {
-            if (res.ok) {
-              parent.postMessage({ pluginMessage: { type: 'notify', msg: 'Sent successfully to n8n!' } }, '*');
-            } else {
-              parent.postMessage({ pluginMessage: { type: 'notify', msg: 'n8n webhook failed. Check console.', error: true } }, '*');
-            }
-          })
-          .catch(err => {
-            parent.postMessage({ pluginMessage: { type: 'notify', msg: 'Network error communicating with n8n.', error: true } }, '*');
-          });
       }
     };
 

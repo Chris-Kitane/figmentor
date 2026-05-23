@@ -85,18 +85,6 @@ figma.ui.onmessage = msg => {
     });
     return;
   }
-  // ---------------------------------------------------------------
-  // WEBHOOK: Build full JSON and send to n8n via UI
-  // ---------------------------------------------------------------
-  if (msg.type === 'webhook') {
-    const result = buildExportPayload();
-    if (!result) return;
-    figma.ui.postMessage({
-      type: 'webhook-send',
-      content: JSON.stringify(result.data, null, 2)
-    });
-    return;
-  }
 
   // ---------------------------------------------------------------
   // NOTIFY: Show toast messages from UI

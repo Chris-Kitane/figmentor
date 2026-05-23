@@ -12,7 +12,7 @@
   "ui": "ui.html",
   "networkAccess": {
     "allowedDomains": [
-      "https://*.trycloudflare.com"
+      "none"
     ]
   }
 }
