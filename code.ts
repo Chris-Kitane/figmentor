@@ -20,7 +20,7 @@ figma.ui.onmessage = msg => {
       ? titleMatch[1].trim()
       : firstNodeName.replace(/[\(\)]/g, '').split(/\s+/)[0].trim();
 
-    const stats = { sections: 0, containers: 0, headings: 0, images: 0, iconLists: 0 };
+    const stats = { sections: 0, containers: 0, headings: 0, images: 0, iconLists: 0, buttons: 0, icons: 0 };
     const invisibleNodes: string[] = [];
     const unsupportedTypes = new Set<string>();
     const tree: any[] = [];
@@ -85,7 +85,26 @@ figma.ui.onmessage = msg => {
     });
     return;
   }
+  // ---------------------------------------------------------------
+  // WEBHOOK: Build full JSON and send to n8n via UI
+  // ---------------------------------------------------------------
+  if (msg.type === 'webhook') {
+    const result = buildExportPayload();
+    if (!result) return;
+    figma.ui.postMessage({
+      type: 'webhook-send',
+      content: JSON.stringify(result.data, null, 2)
+    });
+    return;
+  }
 
+  // ---------------------------------------------------------------
+  // NOTIFY: Show toast messages from UI
+  // ---------------------------------------------------------------
+  if (msg.type === 'notify') {
+    figma.notify(msg.msg, { error: msg.error });
+    return;
+  }
   // ---------------------------------------------------------------
   // RENDER: Build full JSON and send to UI for CSS rendering
   // ---------------------------------------------------------------
@@ -183,9 +202,118 @@ function getResponsiveTypography(desktopSize: number) {
   return { tabletSize, mobileSize };
 }
 
-// Extracts layout properties (like absolute positioning) from a Figma node
-function getSharedItemSettings(node: SceneNode): any {
+// Extracts layout properties (like absolute positioning) and utility classes from a Figma node
+function getSharedItemSettings(node: SceneNode, tokens: string[] = []): any {
   const settings: any = {};
+
+  // Cascading Visibility Logic
+  let isHiddenDesktop = tokens.includes('hidden') || tokens.includes('desktop:hidden');
+  let isHiddenTablet = isHiddenDesktop;
+
+  if (tokens.includes('tablet:hidden')) isHiddenTablet = true;
+  if (tokens.includes('tablet:show')) isHiddenTablet = false;
+
+  let isHiddenMobile = isHiddenTablet;
+
+  if (tokens.includes('mobile:hidden')) isHiddenMobile = true;
+  if (tokens.includes('mobile:show')) isHiddenMobile = false;
+
+  if (isHiddenDesktop) { settings.hide_desktop = 'hidden-desktop'; settings._hide_desktop = 'hidden-desktop'; }
+  if (isHiddenTablet) { settings.hide_tablet = 'hidden-tablet'; settings._hide_tablet = 'hidden-tablet'; }
+  if (isHiddenMobile) { settings.hide_mobile = 'hidden-mobile'; settings._hide_mobile = 'hidden-mobile'; }
+
+  tokens.forEach(token => {
+
+    const widthMatch = token.match(/^(?:(tablet|mobile):)?w-full$/);
+    if (widthMatch) {
+      const breakpoint = widthMatch[1];
+      const isWidget = node.name.toLowerCase().includes('el-') || node.type === 'TEXT';
+      if (isWidget) {
+        const key = breakpoint ? `_element_width_${breakpoint}` : '_element_width';
+        settings[key] = '100%';
+      } else {
+        const key = breakpoint ? `width_${breakpoint}` : 'width';
+        settings[key] = { unit: '%', size: 100, sizes: [] };
+      }
+    }
+
+    const flexDirMatch = token.match(/^(?:(desktop|tablet|mobile):)?flex-(row|col|column|row-reverse|col-reverse|column-reverse)$/);
+    if (flexDirMatch) {
+      const breakpoint = flexDirMatch[1];
+      let dir = flexDirMatch[2];
+      if (dir === 'col') dir = 'column';
+      if (dir === 'col-reverse') dir = 'column-reverse';
+      const key = breakpoint && breakpoint !== 'desktop' ? `flex_direction_${breakpoint}` : 'flex_direction';
+      settings[key] = dir;
+    }
+
+    const gapMatch = token.match(/^(?:(desktop|tablet|mobile):)?gap-(\d+)$/);
+    if (gapMatch) {
+      const breakpoint = gapMatch[1];
+      const val = gapMatch[2];
+      const key = breakpoint && breakpoint !== 'desktop' ? `flex_gap_${breakpoint}` : 'flex_gap';
+      settings[key] = { column: val, row: val, isLinked: true, unit: 'px', size: parseInt(val) };
+    }
+
+    const itemsMatch = token.match(/^(?:(desktop|tablet|mobile):)?items-(start|center|end|stretch)$/);
+    if (itemsMatch) {
+      const breakpoint = itemsMatch[1];
+      let val = itemsMatch[2];
+      if (val === 'start') val = 'flex-start';
+      if (val === 'end') val = 'flex-end';
+      const key = breakpoint && breakpoint !== 'desktop' ? `flex_align_items_${breakpoint}` : 'flex_align_items';
+      settings[key] = val;
+    }
+    
+    const justifyMatch = token.match(/^(?:(desktop|tablet|mobile):)?justify-(start|center|end|between|around|evenly)$/);
+    if (justifyMatch) {
+      const breakpoint = justifyMatch[1];
+      let val = justifyMatch[2];
+      if (val === 'start') val = 'flex-start';
+      if (val === 'end') val = 'flex-end';
+      if (val === 'between') val = 'space-between';
+      if (val === 'around') val = 'space-around';
+      if (val === 'evenly') val = 'space-evenly';
+      const key = breakpoint && breakpoint !== 'desktop' ? `flex_justify_content_${breakpoint}` : 'flex_justify_content';
+      settings[key] = val;
+    }
+
+    const padMatch = token.match(/^(?:(tablet|mobile):)?(p|px|py|pt|pr|pb|pl)-(\d+)$/);
+    if (padMatch) {
+      const breakpoint = padMatch[1];
+      const dir = padMatch[2];
+      const val = padMatch[3];
+      
+      // Determine if this is likely a widget or a container.
+      const isWidget = node.name.toLowerCase().includes('el-') || node.type === 'TEXT';
+      const keyPrefix = isWidget ? '_padding' : 'padding';
+      const key = breakpoint ? `${keyPrefix}_${breakpoint}` : keyPrefix;
+      
+      if (!settings[key]) {
+        let defTop = '0', defRight = '0', defBottom = '0', defLeft = '0';
+        if ('paddingTop' in node && typeof (node as any).paddingTop === 'number') {
+          defTop = (node as any).paddingTop.toString();
+          defRight = (node as any).paddingRight.toString();
+          defBottom = (node as any).paddingBottom.toString();
+          defLeft = (node as any).paddingLeft.toString();
+        }
+        settings[key] = { unit: 'px', top: defTop, right: defRight, bottom: defBottom, left: defLeft, isLinked: false };
+      }
+      
+      if (dir === 'p') {
+        settings[key].top = val; settings[key].right = val;
+        settings[key].bottom = val; settings[key].left = val;
+        settings[key].isLinked = true;
+      } else if (dir === 'px') {
+        settings[key].left = val; settings[key].right = val;
+      } else if (dir === 'py') {
+        settings[key].top = val; settings[key].bottom = val;
+      } else if (dir === 'pt') { settings[key].top = val; }
+      else if (dir === 'pr') { settings[key].right = val; }
+      else if (dir === 'pb') { settings[key].bottom = val; }
+      else if (dir === 'pl') { settings[key].left = val; }
+    }
+  });
 
   if ('layoutPositioning' in node && node.layoutPositioning === 'ABSOLUTE') {
     settings._position = 'absolute';
@@ -252,6 +380,15 @@ function getPreviewItem(
 
   const nodeName = node.name.toLowerCase();
 
+  // Icon
+  if (
+    nodeName.startsWith('el-icon') &&
+    (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE' || node.type === 'VECTOR')
+  ) {
+    stats.icons++;
+    return { type: 'icon', label: node.name };
+  }
+
   // Image / shape
   if (
     nodeName.startsWith('el-image') ||
@@ -278,6 +415,15 @@ function getPreviewItem(
   ) {
     stats.iconLists++;
     return { type: 'icon-list', label: node.name };
+  }
+
+  // Button
+  if (
+    nodeName.includes('el-btn') &&
+    (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE')
+  ) {
+    stats.buttons++;
+    return { type: 'button', label: node.name };
   }
 
   // Container (Frame / Component / Instance) — recurse up to MAX_PREVIEW_DEPTH
@@ -318,7 +464,58 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
     tokenSource = nodeName.slice(labelMatch[0].length).replace(/^[\)\s]+/, '');
   }
 
+  // Expand grouped utility classes, e.g., tablet:(flex-column px-0) -> tablet:flex-column tablet:px-0
+  tokenSource = tokenSource.replace(/(desktop|tablet|mobile):\s*\(\s*([^)]+?)\s*\)/g, (match, prefix, inner) => {
+    return inner.split(/\s+/).filter(Boolean).map((t: string) => `${prefix}:${t}`).join(' ');
+  });
+
   const tokens = tokenSource.split(/\s+/).filter(Boolean);
+
+  // -------------------------------------------------------------
+  // TYPE 0: ICON WIDGETS
+  // -------------------------------------------------------------
+  if (
+    nodeName.startsWith('el-icon') &&
+    (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE' || node.type === 'VECTOR')
+  ) {
+    const iconSettings: any = {
+      selected_icon: { value: 'fas fa-star', library: 'fa-solid' },
+      view: 'default'
+    };
+
+    let iconColor = '';
+    let iconSize = 24;
+
+    if ('children' in node) {
+      node.children.forEach(child => {
+        if (child.type === 'TEXT') {
+          if (Array.isArray(child.fills) && child.fills.length > 0 && child.fills[0].type === 'SOLID') {
+            iconColor = rgbaToHex(child.fills[0].color);
+          }
+          if (child.fontSize && typeof child.fontSize === 'number') {
+            iconSize = child.fontSize;
+          }
+        } else if (child.type === 'VECTOR' || child.type === 'INSTANCE') {
+          if ('fills' in child && Array.isArray(child.fills) && child.fills.length > 0 && child.fills[0].type === 'SOLID') {
+            iconColor = rgbaToHex(child.fills[0].color);
+          }
+          iconSize = Math.max(child.width, child.height);
+        }
+      });
+    } else if (node.type === 'VECTOR') {
+      if ('fills' in node && Array.isArray(node.fills) && node.fills.length > 0 && node.fills[0].type === 'SOLID') {
+        iconColor = rgbaToHex(node.fills[0].color);
+      }
+      iconSize = Math.max(node.width, node.height);
+    }
+
+    if (iconColor) iconSettings.primary_color = iconColor;
+    if (iconSize > 0) iconSettings.size = { unit: 'px', size: Math.round(iconSize), sizes: [] };
+    
+    Object.assign(iconSettings, getSharedItemSettings(node, tokens));
+
+    return { id, elType: 'widget', widgetType: 'icon', settings: iconSettings, elements: [] };
+  }
 
   // -------------------------------------------------------------
   // TYPE A: IMAGES & SHAPES
@@ -338,7 +535,7 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
       image_size: "full"
     };
 
-    Object.assign(imageSettings, getSharedItemSettings(node));
+    Object.assign(imageSettings, getSharedItemSettings(node, tokens));
 
     tokens.forEach(token => {
       const rMatch = token.match(/^rounded-(\d+)$/);
@@ -362,7 +559,7 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
       typography_typography: 'custom'
     };
 
-    Object.assign(textSettings, getSharedItemSettings(node));
+    Object.assign(textSettings, getSharedItemSettings(node, tokens));
 
     if (Array.isArray(node.fills) && node.fills.length > 0 && node.fills[0].type === 'SOLID') {
       textSettings.title_color = rgbaToHex(node.fills[0].color);
@@ -526,9 +723,105 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
     listSettings.icon_size = { size: Math.round(iconSize), unit: 'px', sizes: [] };
     if (textColor) listSettings.text_color = textColor;
 
-    Object.assign(listSettings, getSharedItemSettings(node));
+    Object.assign(listSettings, getSharedItemSettings(node, tokens));
 
     return { id, elType: 'widget', widgetType: 'icon-list', settings: listSettings, elements: [] };
+  }
+
+  // -------------------------------------------------------------
+  // TYPE B.75: BUTTON WIDGETS
+  // -------------------------------------------------------------
+  if (nodeName.includes('el-btn') && (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE')) {
+    const buttonSettings: any = {
+      text: 'Click here',
+      size: 'md',
+      typography_typography: 'custom'
+    };
+
+    if ('fills' in node && Array.isArray(node.fills)) {
+      const solidFill = node.fills.find((f: any) => f.type === 'SOLID' && f.visible !== false);
+      if (solidFill && (solidFill.opacity === undefined || solidFill.opacity > 0) && node.opacity > 0) {
+        buttonSettings.background_color = rgbaToHex(solidFill.color);
+      } else {
+        buttonSettings.background_color = 'transparent';
+      }
+    } else {
+      buttonSettings.background_color = 'transparent';
+    }
+
+    const radius = ('cornerRadius' in node && typeof node.cornerRadius === 'number') ? node.cornerRadius.toString() : '0';
+    buttonSettings.border_radius = {
+      unit: 'px',
+      top: radius, right: radius, bottom: radius, left: radius,
+      isLinked: true
+    };
+
+    if ('strokes' in node && Array.isArray(node.strokes) && node.strokes.length > 0) {
+      const solidStroke = node.strokes.find((s: any) => s.type === 'SOLID' && s.visible !== false);
+      if (solidStroke) {
+        buttonSettings.border_border = 'solid';
+        buttonSettings.border_color = rgbaToHex(solidStroke.color);
+        if ('strokeWeight' in node && typeof node.strokeWeight === 'number') {
+          const w = node.strokeWeight.toString();
+          buttonSettings.border_width = {
+            unit: 'px',
+            top: w, right: w, bottom: w, left: w,
+            isLinked: true
+          };
+        }
+      }
+    }
+
+    if (node.layoutMode !== 'NONE') {
+      const pTop = node.paddingTop.toString();
+      const pRight = node.paddingRight.toString();
+      const pBottom = node.paddingBottom.toString();
+      const pLeft = node.paddingLeft.toString();
+
+      buttonSettings.text_padding = {
+        unit: 'px',
+        top: pTop, right: pRight, bottom: pBottom, left: pLeft,
+        isLinked: pTop === pRight && pRight === pBottom && pBottom === pLeft
+      };
+    }
+    buttonSettings.align_self = 'stretch';
+    buttonSettings.align = 'justify';
+    buttonSettings.content_align = 'center';
+
+    if (node.width > 0) {
+      buttonSettings._element_width = 'initial';
+      buttonSettings._element_custom_width = { unit: 'px', size: Math.round(node.width), sizes: [] };
+    }
+
+    if ('children' in node) {
+      node.children.forEach(child => {
+        if (child.type === 'TEXT') {
+          buttonSettings.text = child.characters;
+
+          if (Array.isArray(child.fills) && child.fills.length > 0 && child.fills[0].type === 'SOLID') {
+            buttonSettings.button_text_color = rgbaToHex(child.fills[0].color);
+          }
+
+          if (child.fontSize && typeof child.fontSize === 'number') {
+            buttonSettings.typography_font_size = { size: child.fontSize, unit: 'px', sizes: [] };
+          }
+
+          if (child.fontName && typeof child.fontName !== 'symbol') {
+            buttonSettings.typography_font_family = child.fontName.family;
+            const style = child.fontName.style.toLowerCase();
+            if (style.includes('bold')) buttonSettings.typography_font_weight = '700';
+            else if (style.includes('medium')) buttonSettings.typography_font_weight = '500';
+            else if (style.includes('semibold')) buttonSettings.typography_font_weight = '600';
+            else if (style.includes('light')) buttonSettings.typography_font_weight = '300';
+            else buttonSettings.typography_font_weight = '400';
+          }
+        }
+      });
+    }
+
+    Object.assign(buttonSettings, getSharedItemSettings(node, tokens));
+
+    return { id, elType: 'widget', widgetType: 'button', settings: buttonSettings, elements: [] };
   }
 
   // -------------------------------------------------------------
@@ -552,6 +845,7 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
     let borderRadius: any = null;
     let contentWidth = 'full';
     let boxedWidth = '';
+    let innerCustomWidth = '';
 
     let isGrid = false;
     let gridCols = '';
@@ -582,8 +876,13 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
       } else if (token.startsWith('w-')) {
         const match = token.match(/^w-(\d+)$/);
         if (match) {
-          contentWidth = 'boxed';
-          boxedWidth = match[1];
+          if (isTopLevel) {
+            contentWidth = 'boxed';
+            boxedWidth = match[1];
+          } else {
+            contentWidth = 'full';
+            innerCustomWidth = match[1];
+          }
         }
       }
 
@@ -650,10 +949,28 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
       content_width: contentWidth
     };
 
+    if (innerCustomWidth) {
+      containerSettings.width = {
+        unit: 'px',
+        size: parseInt(innerCustomWidth),
+        sizes: []
+      };
+    } else if (node.width > 0 && !isTopLevel) {
+      const isFixedWidth =
+        node.layoutMode === 'NONE' ||
+        ('layoutSizingHorizontal' in node && (node as FrameNode).layoutSizingHorizontal === 'FIXED');
+
+      if (isFixedWidth) {
+        containerSettings.width = {
+          unit: 'px',
+          size: Math.round(node.width),
+          sizes: []
+        };
+      }
+    }
+
     if (sectionLabel) containerSettings._title = sectionLabel;
     if (boxedWidth) containerSettings.boxed_width = { unit: 'px', size: parseInt(boxedWidth), sizes: [] };
-
-    Object.assign(containerSettings, getSharedItemSettings(node));
 
     if (isGrid) {
       containerSettings.container_type = 'grid';
@@ -680,6 +997,8 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
     if (padding) containerSettings.padding = padding;
     if (paddingTablet) containerSettings.padding_tablet = paddingTablet;
     if (paddingMobile) containerSettings.padding_mobile = paddingMobile;
+
+    Object.assign(containerSettings, getSharedItemSettings(node, tokens));
 
     if (backgroundColor) {
       containerSettings.background_background = 'classic';
