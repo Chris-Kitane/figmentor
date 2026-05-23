@@ -398,7 +398,7 @@ function getPreviewItem(
 
   // Icon list
   if (
-    nodeName.includes('icon-list') &&
+    nodeName.includes('el-icon-list') &&
     (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE')
   ) {
     stats.iconLists++;
@@ -618,7 +618,7 @@ function buildElementorNode(node: SceneNode, isTopLevel: boolean = false): any {
   // -------------------------------------------------------------
   // TYPE B.5: ICON LIST WIDGETS
   // -------------------------------------------------------------
-  if (nodeName.includes('icon-list') && (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE')) {
+  if (nodeName.includes('el-icon-list') && (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE')) {
 
     const determinedWidth = nodeName.includes('w-fit') ? 'initial' : 'inherit';
 

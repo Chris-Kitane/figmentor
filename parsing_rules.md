@@ -48,4 +48,4 @@ To force a Figma layer to render as a specific Elementor widget, prepend the lay
 * **`el-image`**: Forces the layer to be an Image Widget. (Alternatively, just use a plain Rect/Ellipse).
 * **`el-btn`**: Forces the layer to be a Button Widget. (Extracts background fill, border, and nested text layer).
 * **`el-icon`**: Forces the layer to be an Icon Widget. (Extracts size and primary color from a nested vector or icon-font text layer).
-* **`icon-list`**: Maps a Frame into an Icon List Widget, dynamically converting its children into list items.
+* **`el-icon-list`**: Maps a Frame into an Icon List Widget, dynamically converting its children into list items.
