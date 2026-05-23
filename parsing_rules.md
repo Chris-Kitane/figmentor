@@ -24,3 +24,28 @@ Not all naming conventions in layer names are considered "Tailwind classes" that
 ## 3. Top-Level Export Rule
 * **WYSIWYG Exporting:** Whatever node(s) you select in Figma are exactly what gets exported as the top-level sections in Elementor.
 * **No Forced Wrappers:** Selecting multiple sibling sections and exporting them will result in multiple sibling sections in Elementor. Selecting a giant "Page" frame will export that page frame as a master parent container.
+
+## 4. Responsive Token Grouping
+To keep layer names clean and avoid repetitive prefixes, the parser supports parenthetical grouping for responsive breakpoints:
+* **Syntax:** `[breakpoint]:(token1 token2 ...)`
+* **Example:** `tablet:(flex-col px-0 w-full)`
+* **Result:** This expands under the hood to `tablet:flex-col tablet:px-0 tablet:w-full`.
+
+## 5. Cascading Visibility Logic
+Visibility tokens follow a **Top-Down Cascading Inheritance** model, matching Elementor's native responsive engine.
+
+* **Desktop rules all:** `hidden` (or `desktop:hidden`) hides the element on Desktop, and because it cascades down, it naturally stays hidden on Tablet and Mobile.
+* **Tablet cascades to Mobile:** `tablet:hidden` leaves Desktop visible, but completely hides the element on Tablet and Mobile.
+* **Mobile acts alone:** `mobile:hidden` only hides the element on Mobile.
+* **Overrides (`show`):** You can break the inheritance chain with a `show` class. For example, `hidden mobile:show` hides it on Desktop and Tablet, but forces it to appear on Mobile screens.
+
+## 6. Container Sizing (`w-full`)
+* **Top-Level Sections:** When a node has the `w-full` class and is the absolute top-level selection, it is translated into a **Full Width** section in Elementor.
+* **Inner Containers/Widgets:** When nested containers or text/widgets have `w-full` (or responsive versions like `mobile:w-full`), the parser correctly maps this to `_element_width = '100%'` (Custom Width slider) rather than "Boxed" vs "Full Width", ensuring precise responsive overrides in Elementor.
+
+## 7. Widget Declarations
+To force a Figma layer to render as a specific Elementor widget, prepend the layer name with a widget directive. The parser will extract child layers appropriately:
+* **`el-image`**: Forces the layer to be an Image Widget. (Alternatively, just use a plain Rect/Ellipse).
+* **`el-btn`**: Forces the layer to be a Button Widget. (Extracts background fill, border, and nested text layer).
+* **`el-icon`**: Forces the layer to be an Icon Widget. (Extracts size and primary color from a nested vector or icon-font text layer).
+* **`icon-list`**: Maps a Frame into an Icon List Widget, dynamically converting its children into list items.
