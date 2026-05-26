@@ -1010,13 +1010,16 @@
         data.warnings.forEach(w => {
           const row = document.createElement('div');
           row.className = 'warning-row';
-          row.innerHTML = `
+          // FIX 1: Use insertAdjacentHTML for static SVG, then textContent for user data
+          row.insertAdjacentHTML('beforeend', `
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M6 1L11 10H1L6 1Z" stroke="#f59e0b" stroke-width="1.2" fill="none" stroke-linejoin="round"/>
               <rect x="5.4" y="4.5" width="1.2" height="3" rx="0.6" fill="#f59e0b"/>
               <rect x="5.4" y="8.2" width="1.2" height="1.2" rx="0.6" fill="#f59e0b"/>
-            </svg>
-            <span>${w}</span>`;
+            </svg>`);
+          const warnSpan = document.createElement('span');
+          warnSpan.textContent = w;
+          row.appendChild(warnSpan);
           box.appendChild(row);
         });
         warningsArea.appendChild(box);
@@ -1109,7 +1112,8 @@
           const row = document.createElement('div');
           row.className = 'child-row';
           const badgeClass = { 'heading': 'badge-heading', 'image': 'badge-image', 'icon-list': 'badge-iconlist', 'button': 'badge-button', 'icon': 'badge-icon' }[child.type] || 'badge-container';
-          const typeLabel = { 'heading': 'Text', 'image': 'Image', 'icon-list': 'Icon List', 'button': 'Button', 'icon': 'Icon' }[child.type] || child.type;
+          // FIX 6: Escape the fallback so unknown node types can't inject HTML
+          const typeLabel = { 'heading': 'Text', 'image': 'Image', 'icon-list': 'Icon List', 'button': 'Button', 'icon': 'Icon' }[child.type] || escHtml(child.type);
           row.innerHTML = `<span style="width:10px;flex-shrink:0;"></span><span class="widget-badge ${badgeClass}">${typeLabel}</span><span class="child-label" title="${escHtml(child.label)}">${escHtml(child.label)}</span>`;
           wrapper.appendChild(row);
         }
@@ -1121,7 +1125,15 @@
     // Layout renderer — converts Elementor JSON → real HTML/CSS
     // ----------------------------------------------------------------
     function renderLayout(msg) {
-      const data = JSON.parse(msg.data);
+      // FIX 5: Guard against malformed JSON from the plugin sandbox
+      let data;
+      try {
+        data = JSON.parse(msg.data);
+      } catch (e) {
+        console.error('[figmantor] Failed to parse render data:', e);
+        showState('preview');
+        return;
+      }
       const canvas = document.getElementById('render-canvas');
       canvas.innerHTML = '';
       canvas.style.transform = 'scale(0.5)';
@@ -1199,7 +1211,7 @@
 
       // Background
       if (s.background_background === 'classic' && s.background_color) {
-        div.style.backgroundColor = s.background_color;
+        div.style.backgroundColor = safeColor(s.background_color); // FIX 3
       }
 
       // Border radius
@@ -1251,8 +1263,8 @@
       node.className = 'el-widget-heading';
       node.textContent = s.title || '';
 
-      if (s.title_color) node.style.color = s.title_color;
-      if (s.typography_font_family) node.style.fontFamily = `'${s.typography_font_family}', sans-serif`;
+      if (s.title_color) node.style.color = safeColor(s.title_color); // FIX 3
+      if (s.typography_font_family) node.style.fontFamily = `'${safeCSSString(s.typography_font_family)}', sans-serif`; // FIX 2
       if (s.typography_font_size?.size) node.style.fontSize = s.typography_font_size.size + 'px';
       if (s.typography_font_weight) node.style.fontWeight = s.typography_font_weight;
       if (s.typography_line_height?.size) {
@@ -1299,7 +1311,7 @@
 
       // Try to use the actual image URL (placehold.co)
       const url = s.image?.url;
-      if (url && url.startsWith('http')) {
+      if (url && isSafeImageUrl(url)) { // FIX 7: require https:
         const img = document.createElement('img');
         img.src = url;
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
@@ -1334,12 +1346,12 @@
 
         const dot = document.createElement('span');
         dot.className = 'el-iconlist-dot';
-        if (s.icon_color) dot.style.background = s.icon_color;
+        if (s.icon_color) dot.style.background = safeColor(s.icon_color); // FIX 3
 
         const txt = document.createElement('span');
         txt.textContent = item.text || '';
-        if (s.text_color) txt.style.color = s.text_color;
-        if (s.typography_font_family) txt.style.fontFamily = `'${s.typography_font_family}', sans-serif`;
+        if (s.text_color) txt.style.color = safeColor(s.text_color); // FIX 3
+        if (s.typography_font_family) txt.style.fontFamily = `'${safeCSSString(s.typography_font_family)}', sans-serif`; // FIX 2
         if (s.typography_font_size?.size) txt.style.fontSize = s.typography_font_size.size + 'px';
         if (s.typography_font_weight) txt.style.fontWeight = s.typography_font_weight;
 
@@ -1374,10 +1386,10 @@
       btn.className = 'el-button-inner';
       btn.textContent = s.text || 'Click here';
 
-      if (s.background_color) btn.style.backgroundColor = s.background_color;
-      if (s.button_text_color) btn.style.color = s.button_text_color;
+      if (s.background_color) btn.style.backgroundColor = safeColor(s.background_color); // FIX 3
+      if (s.button_text_color) btn.style.color = safeColor(s.button_text_color); // FIX 3
 
-      if (s.typography_font_family) btn.style.fontFamily = `'${s.typography_font_family}', sans-serif`;
+      if (s.typography_font_family) btn.style.fontFamily = `'${safeCSSString(s.typography_font_family)}', sans-serif`; // FIX 2
       if (s.typography_font_size?.size) btn.style.fontSize = s.typography_font_size.size + 'px';
       if (s.typography_font_weight) btn.style.fontWeight = s.typography_font_weight;
 
@@ -1387,7 +1399,7 @@
 
       if (s.border_border === 'solid') {
         btn.style.borderStyle = 'solid';
-        if (s.border_color) btn.style.borderColor = s.border_color;
+        if (s.border_color) btn.style.borderColor = safeColor(s.border_color); // FIX 3
         if (s.border_width?.top) {
           btn.style.borderWidth = `${s.border_width.top}px ${s.border_width.right}px ${s.border_width.bottom}px ${s.border_width.left}px`;
         }
@@ -1423,7 +1435,7 @@
       const icon = document.createElement('div');
       icon.className = 'el-icon-inner';
 
-      if (s.primary_color) icon.style.color = s.primary_color;
+      if (s.primary_color) icon.style.color = safeColor(s.primary_color); // FIX 3
       if (s.size?.size) {
         icon.style.width = s.size.size + 'px';
         icon.style.height = s.size.size + 'px';
@@ -1466,6 +1478,28 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    // FIX 2: Strips characters that could break out of a CSS string context
+    // (e.g. a Figma font name containing a single-quote in fontFamily: '...')
+    function safeCSSString(str) {
+      return String(str).replace(/['";\\]/g, '');
+    }
+
+    // FIX 3: Validates that a value is a CSS hex color before applying it to a style property.
+    // rgbaToHex() in code.ts always produces #rrggbb — this guards against future changes.
+    function safeColor(val) {
+      if (!val) return '';
+      return /^#[0-9a-fA-F]{3,8}$/.test(String(val)) ? val : '';
+    }
+
+    // FIX 7: Ensures an image URL uses HTTPS before assigning it to img.src
+    function isSafeImageUrl(url) {
+      try {
+        return new URL(url).protocol === 'https:';
+      } catch {
+        return false;
+      }
     }
   </script>
 
