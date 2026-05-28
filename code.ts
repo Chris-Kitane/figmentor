@@ -125,7 +125,7 @@ figma.ui.onmessage = msg => {
 
   if (msg.type === 'load-state') {
     figma.clientStorage.getAsync('figmantor-editor-state').then((data) => {
-      figma.ui.postMessage({ type: 'load-state-result', data: data ?? null });
+      figma.ui.postMessage({ type: 'load-state-result', data: data !== undefined && data !== null ? data : null });
     });
     return;
   }
