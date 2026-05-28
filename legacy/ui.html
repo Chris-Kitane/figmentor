@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ---- Design tokens ---- */
+    :root {
+      --bg: #0e0e10;
+      --surface: #18181d;
+      --surface-2: #222230;
+      --border: #2b2b3a;
+      --primary: #92003B;
+      --primary-h: #b0004a;
+      --accent: #e55a87;
+      --text-1: #f0f0f4;
+      --text-2: #8b8b9e;
+      --text-3: #55556a;
+      --warn: #f59e0b;
+      --warn-bg: rgba(245, 158, 11, 0.08);
+      --warn-border: rgba(245, 158, 11, 0.22);
+      --render-zoom: 0.5;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text-1);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* ---- State containers ---- */
+    .state {
+      display: none;
+      width: 100%;
+      height: 100%;
+      flex-direction: column;
+    }
+
+    .state.active {
+      display: flex;
+    }
+
+    /* ================================================================
+       STATE: IDLE
+    ================================================================ */
+    #state-idle {
+      padding: 28px 24px 24px;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      background: var(--primary);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 0 20px rgba(146, 0, 59, 0.35);
+    }
+
+    .brand-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-1);
+      letter-spacing: -0.5px;
+    }
+
+    .idle-heading {
+      font-size: 23px;
+      font-weight: 700;
+      letter-spacing: -0.7px;
+      line-height: 1.15;
+      margin-bottom: 12px;
+    }
+
+    .idle-sub {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.65;
+    }
+
+    .idle-divider {
+      width: 36px;
+      height: 2px;
+      background: var(--primary);
+      border-radius: 2px;
+      margin: 20px 0;
+      opacity: 0.6;
+    }
+
+    .idle-tip {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      margin-top: 10px;
+    }
+
+    .idle-tip-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+      margin-top: 6px;
+    }
+
+    .idle-tip p {
+      font-size: 12px;
+      color: var(--text-3);
+      line-height: 1.6;
+    }
+
+    /* ================================================================
+       STATE: LOADING
+    ================================================================ */
+    #state-loading {
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+
+    .spinner {
+      width: 34px;
+      height: 34px;
+      border: 2.5px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loading-label {
+      font-size: 13px;
+      color: var(--text-2);
+    }
+
+    /* ================================================================
+       STATE: PREVIEW
+    ================================================================ */
+    #state-preview {
+      overflow: hidden;
+    }
+
+    /* Header */
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 10px;
+    }
+
+    .preview-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .preview-header-icon {
+      flex-shrink: 0;
+      opacity: 0.5;
+    }
+
+    .preview-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      gap: 5px;
+      padding: 10px 18px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .stat-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 9px;
+      font-size: 11px;
+      color: var(--text-2);
+    }
+
+    .stat-chip .chip-count {
+      font-weight: 700;
+      color: var(--text-1);
+    }
+
+    /* Warnings */
+    .warnings-area {
+      flex-shrink: 0;
+      padding: 0 14px;
+    }
+
+    .warning-box {
+      margin-top: 8px;
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      border-radius: 8px;
+      padding: 8px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .warning-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      font-size: 11.5px;
+      color: var(--warn);
+      line-height: 1.5;
+    }
+
+    .warning-row svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* Section tree */
+    .section-tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 14px;
+      min-height: 0;
+    }
+
+    .section-tree::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .section-tree::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .section-tree::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    .section-item {
+      margin-bottom: 4px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+
+    .section-item:hover {
+      border-color: var(--surface-2);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 11px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.12s;
+      border-radius: 8px;
+    }
+
+    .section-header:hover {
+      background: var(--surface-2);
+    }
+
+    .section-item.open>.section-header {
+      border-radius: 8px 8px 0 0;
+    }
+
+    .chevron {
+      color: var(--text-3);
+      font-size: 9px;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+      width: 10px;
+    }
+
+    .section-item.open>.section-header .chevron {
+      transform: rotate(90deg);
+    }
+
+    .section-label {
+      flex: 1;
+      font-size: 12.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .section-badge {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-3);
+      background: var(--surface-2);
+      border-radius: 10px;
+      padding: 1px 7px;
+      flex-shrink: 0;
+    }
+
+    .section-children {
+      display: none;
+      padding: 4px 10px 8px;
+      border-top: 1px solid var(--border);
+      animation: fadeIn 0.15s ease;
+    }
+
+    .section-item.open>.section-children {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .child-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 5px;
+      border-radius: 5px;
+      transition: background 0.1s;
+    }
+
+    .child-row:hover {
+      background: var(--surface-2);
+    }
+
+    .widget-badge {
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .badge-heading {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+    }
+
+    .badge-image {
+      background: rgba(16, 185, 129, 0.14);
+      color: #34d399;
+    }
+
+    .badge-container {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+    }
+
+    .badge-iconlist {
+      background: rgba(229, 90, 135, 0.14);
+      color: var(--accent);
+    }
+
+    .badge-button {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+    }
+
+    .badge-icon {
+      background: rgba(168, 85, 247, 0.15);
+      color: #a855f7;
+    }
+
+    .child-label {
+      flex: 1;
+      font-size: 11.5px;
+      color: var(--text-2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .child-sub {
+      font-size: 10.5px;
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+
+    /* Recursive tree */
+    .tree-branch {
+      padding-left: 13px;
+      border-left: 1px solid var(--border);
+      margin-left: 7px;
+      margin-top: 1px;
+    }
+
+    .child-row-expandable {
+      cursor: pointer;
+    }
+
+    .child-row-expandable:hover {
+      background: var(--surface-2);
+    }
+
+    .chevron-sm {
+      font-size: 8px;
+      color: var(--text-3);
+      flex-shrink: 0;
+      width: 10px;
+      text-align: center;
+      display: inline-block;
+      transition: transform 0.18s ease;
+    }
+
+    .nest-open>.child-row-expandable>.chevron-sm {
+      transform: rotate(90deg);
+    }
+
+    .depth-cap {
+      font-size: 10px;
+      color: var(--text-3);
+      padding: 3px 4px;
+      font-style: italic;
+    }
+
+    /* Empty tree */
+    .tree-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 32px 0;
+      color: var(--text-3);
+      font-size: 12px;
+    }
+
+    /* ================================================================
+       STATE: RENDER
+    ================================================================ */
+    #state-render {
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    .render-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .render-toolbar-title {
+      flex: 1;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .zoom-group {
+      display: flex;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    .zoom-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      padding: 4px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+
+    .zoom-btn:hover {
+      border-color: var(--text-3);
+      color: var(--text-1);
+    }
+
+    .zoom-btn.active {
+      background: var(--surface-2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .render-viewport {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px;
+      min-height: 0;
+      background: #f0f0f5;
+    }
+
+    .render-viewport::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .render-viewport::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 2px;
+    }
+
+    /* The 1440px canvas scaled by zoom */
+    .render-canvas {
+      width: 1440px;
+      transform-origin: top left;
+      transform: scale(var(--render-zoom));
+    }
+
+    /* ================================================================
+       ELEMENTOR RENDER STYLES
+       These style the live-rendered HTML that mirrors Elementor output
+    ================================================================ */
+    .el-section-wrap {
+      width: 100%;
+      position: relative;
+    }
+
+    .el-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: rgba(146, 0, 59, 0.7);
+      background: rgba(146, 0, 59, 0.06);
+      border-left: 3px solid rgba(146, 0, 59, 0.4);
+      padding: 3px 8px;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .el-container {
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    .el-container.el-grid {
+      display: grid;
+    }
+
+    .el-container.el-flex {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .el-widget-heading {
+      box-sizing: border-box;
+      word-break: break-word;
+    }
+
+    .el-widget-image {
+      box-sizing: border-box;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .el-image-placeholder {
+      width: 100%;
+      min-height: 120px;
+      background: linear-gradient(135deg, #dde1e8 0%, #c8cdd6 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: inherit;
+    }
+
+    .el-image-placeholder svg {
+      opacity: 0.35;
+    }
+
+    .el-widget-iconlist {
+      box-sizing: border-box;
+      width: 100%;
+    }
+
+    .el-iconlist-ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .el-iconlist-li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .el-iconlist-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+      margin-top: 0.45em;
+    }
+
+    .el-widget-button {
+      box-sizing: border-box;
+      width: 100%;
+      display: flex;
+    }
+
+    .el-button-inner {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .el-widget-icon {
+      box-sizing: border-box;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .el-icon-inner {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .el-icon-inner svg {
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
+    }
+
+    /* ================================================================
+       ACTION BAR (shared between preview + render return)
+    ================================================================ */
+    .action-bar {
+      display: flex;
+      gap: 8px;
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    /* ================================================================
+       SHARED BUTTON STYLES
+    ================================================================ */
+    .btn {
+      border: none;
+      border-radius: 9px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.14s, transform 0.08s, border-color 0.14s, color 0.14s;
+      letter-spacing: -0.1px;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      padding: 13px;
+      box-shadow: 0 4px 18px rgba(146, 0, 59, 0.28);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-h);
+    }
+
+    .btn-ghost {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      padding: 5px 11px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 7px;
+      flex-shrink: 0;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--text-3);
+      color: var(--text-1);
+    }
+
+    /* 3-button action bar layout */
+    .btn-reanalyze {
+      flex: 0 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      padding: 11px 13px;
+    }
+
+    .btn-reanalyze:hover {
+      border-color: var(--text-3);
+      color: var(--text-1);
+    }
+
+    .btn-render {
+      flex: 1;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-1);
+      padding: 11px;
+    }
+
+    .btn-render:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(229, 90, 135, 0.08);
+    }
+
+    .btn-export {
+      flex: 1;
+      background: var(--primary);
+      color: white;
+      padding: 11px;
+      box-shadow: 0 4px 18px rgba(146, 0, 59, 0.25);
+    }
+
+    .btn-export:hover {
+      background: var(--primary-h);
+    }
+
+    .btn-back {
+      flex: 0 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      padding: 11px 13px;
+    }
+
+    .btn-back:hover {
+      border-color: var(--text-3);
+      color: var(--text-1);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ============================================================
+       STATE: IDLE
+  ============================================================ -->
+  <div id="state-idle" class="state active">
+    <div>
+      <div class="brand">
+        <div class="brand-mark">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="1" width="6" height="6" rx="1.5" fill="white" fill-opacity="0.95" />
+            <rect x="9" y="1" width="6" height="6" rx="1.5" fill="white" fill-opacity="0.4" />
+            <rect x="1" y="9" width="6" height="6" rx="1.5" fill="white" fill-opacity="0.4" />
+            <rect x="9" y="9" width="6" height="6" rx="1.5" fill="white" fill-opacity="0.95" />
+          </svg>
+        </div>
+        <span class="brand-name">figmantor</span>
+      </div>
+      <p class="idle-heading">Figma&nbsp;→<br>Elementor</p>
+      <div class="idle-divider"></div>
+      <p class="idle-sub">Select any frame or section on your canvas, then analyze it to see a live structure preview
+        before exporting.</p>
+      <div class="idle-tip" style="margin-top: 20px;">
+        <div class="idle-tip-dot"></div>
+        <p>Analyzes containers, text layers, images, and icon lists — and flags any unsupported types before you export.
+        </p>
+      </div>
+      <div class="idle-tip">
+        <div class="idle-tip-dot"></div>
+        <p>Use <code
+            style="color:var(--accent);background:rgba(229,90,135,0.1);padding:1px 5px;border-radius:4px;">(Section Name)</code>
+          in your layer name to label sections in the preview.</p>
+      </div>
+    </div>
+    <button id="analyze-btn" class="btn btn-primary">Analyze Selection</button>
+  </div>
+
+  <!-- ============================================================
+       STATE: LOADING
+  ============================================================ -->
+  <div id="state-loading" class="state">
+    <div class="spinner"></div>
+    <span class="loading-label" id="loading-label">Analyzing selection…</span>
+  </div>
+
+  <!-- ============================================================
+       STATE: PREVIEW
+  ============================================================ -->
+  <div id="state-preview" class="state">
+
+    <div class="preview-header">
+      <div class="preview-header-left">
+        <svg class="preview-header-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <rect x="1" y="1" width="12" height="12" rx="2" stroke="#8b8b9e" stroke-width="1.3" fill="none" />
+          <rect x="3.5" y="4" width="7" height="1.3" rx="0.65" fill="#8b8b9e" />
+          <rect x="3.5" y="6.8" width="5" height="1.3" rx="0.65" fill="#8b8b9e" />
+        </svg>
+        <span class="preview-title" id="preview-title">—</span>
+      </div>
+      <button class="btn btn-ghost" id="reanalyze-btn-top">← Re-analyze</button>
+    </div>
+
+    <div class="stats-bar" id="stats-bar"></div>
+    <div class="warnings-area" id="warnings-area"></div>
+
+    <div class="section-tree" id="section-tree"></div>
+
+    <div class="action-bar">
+      <button class="btn btn-reanalyze" id="reanalyze-btn-bottom">← Back</button>
+      <button class="btn btn-render" id="render-btn">👁 Preview</button>
+      <button class="btn btn-export" id="export-btn">Download →</button>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       STATE: RENDER
+  ============================================================ -->
+  <div id="state-render" class="state">
+
+    <div class="render-toolbar">
+      <span class="render-toolbar-title" id="render-title">Layout Preview</span>
+      <div class="zoom-group">
+        <button class="zoom-btn" id="zoom-25" data-zoom="0.25">25%</button>
+        <button class="zoom-btn active" id="zoom-50" data-zoom="0.5">50%</button>
+        <button class="zoom-btn" id="zoom-75" data-zoom="0.75">75%</button>
+      </div>
+      <button class="btn btn-ghost" id="back-to-preview-btn">← Back</button>
+    </div>
+
+    <div class="render-viewport" id="render-viewport">
+      <div class="render-canvas" id="render-canvas" style="--render-zoom: 0.5;"></div>
+    </div>
+
+  </div>
+
+  <script>
+    // ----------------------------------------------------------------
+    // State manager
+    // ----------------------------------------------------------------
+    function showState(name) {
+      document.querySelectorAll('.state').forEach(el => el.classList.remove('active'));
+      document.getElementById('state-' + name).classList.add('active');
+    }
+
+    function showLoading(label) {
+      document.getElementById('loading-label').textContent = label || 'Analyzing selection…';
+      showState('loading');
+    }
+
+    // ----------------------------------------------------------------
+    // Button wiring
+    // ----------------------------------------------------------------
+    document.getElementById('analyze-btn').onclick = () => {
+      showLoading('Analyzing selection…');
+      parent.postMessage({ pluginMessage: { type: 'preview' } }, '*');
+    };
+
+    document.getElementById('reanalyze-btn-top').onclick = () => showState('idle');
+    document.getElementById('reanalyze-btn-bottom').onclick = () => showState('idle');
+    document.getElementById('back-to-preview-btn').onclick = () => showState('preview');
+
+    document.getElementById('export-btn').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'export' } }, '*');
+    };
+
+    document.getElementById('render-btn').onclick = () => {
+      showLoading('Building layout preview…');
+      parent.postMessage({ pluginMessage: { type: 'render' } }, '*');
+    };
+
+    // Zoom buttons
+    document.querySelectorAll('.zoom-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.zoom-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const zoom = parseFloat(btn.dataset.zoom);
+        setRenderZoom(zoom);
+      });
+    });
+
+    function setRenderZoom(zoom) {
+      const canvas = document.getElementById('render-canvas');
+      canvas.style.transform = `scale(${zoom})`;
+      // Adjust the wrapper height so it scrolls correctly
+      const viewport = document.getElementById('render-viewport');
+      const naturalHeight = canvas.scrollHeight;
+      canvas.parentElement.style.setProperty('--canvas-natural-h', naturalHeight + 'px');
+      viewport.style.setProperty('--render-zoom', zoom);
+    }
+
+    // ----------------------------------------------------------------
+    // Message handler
+    // ----------------------------------------------------------------
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === 'preview') renderPreview(msg);
+      if (msg.type === 'render-data') renderLayout(msg);
+
+      if (msg.type === 'download') {
+        const blob = new Blob([msg.data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${msg.filename}-elementor.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    };
+
+    // ----------------------------------------------------------------
+    // Preview renderer (structure tree)
+    // ----------------------------------------------------------------
+    function renderPreview(data) {
+      document.getElementById('preview-title').textContent = data.title || 'Untitled';
+
+      const statsBar = document.getElementById('stats-bar');
+      statsBar.innerHTML = '';
+      [
+        { key: 'sections', icon: '⊞', label: 'Sections' },
+        { key: 'containers', icon: '□', label: 'Containers' },
+        { key: 'headings', icon: 'T', label: 'Text' },
+        { key: 'images', icon: '▣', label: 'Images' },
+        { key: 'iconLists', icon: '≡', label: 'Icon Lists' },
+        { key: 'buttons', icon: '⬟', label: 'Buttons' },
+        { key: 'icons', icon: '★', label: 'Icons' },
+      ].forEach(({ key, icon, label }) => {
+        const count = (data.stats || {})[key] || 0;
+        if (!count) return;
+        const chip = document.createElement('div');
+        chip.className = 'stat-chip';
+        chip.innerHTML = `<span>${icon}</span><span class="chip-count">${count}</span><span>${label}</span>`;
+        statsBar.appendChild(chip);
+      });
+
+      const warningsArea = document.getElementById('warnings-area');
+      warningsArea.innerHTML = '';
+      if (data.warnings && data.warnings.length) {
+        const box = document.createElement('div');
+        box.className = 'warning-box';
+        data.warnings.forEach(w => {
+          const row = document.createElement('div');
+          row.className = 'warning-row';
+          // FIX 1: Use insertAdjacentHTML for static SVG, then textContent for user data
+          row.insertAdjacentHTML('beforeend', `
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1L11 10H1L6 1Z" stroke="#f59e0b" stroke-width="1.2" fill="none" stroke-linejoin="round"/>
+              <rect x="5.4" y="4.5" width="1.2" height="3" rx="0.6" fill="#f59e0b"/>
+              <rect x="5.4" y="8.2" width="1.2" height="1.2" rx="0.6" fill="#f59e0b"/>
+            </svg>`);
+          const warnSpan = document.createElement('span');
+          warnSpan.textContent = w;
+          row.appendChild(warnSpan);
+          box.appendChild(row);
+        });
+        warningsArea.appendChild(box);
+      }
+
+      const tree = document.getElementById('section-tree');
+      tree.innerHTML = '';
+      const sections = data.tree || [];
+      if (!sections.length) {
+        tree.innerHTML = `<div class="tree-empty">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect x="3" y="3" width="22" height="22" rx="4" stroke="#55556a" stroke-width="1.5" fill="none"/>
+            <rect x="8" y="10" width="12" height="2" rx="1" fill="#55556a"/>
+            <rect x="8" y="14" width="8" height="2" rx="1" fill="#55556a"/>
+          </svg>
+          <span>No exportable elements found in selection</span>
+        </div>`;
+      } else {
+        sections.forEach(s => tree.appendChild(buildSectionItem(s)));
+      }
+
+      showState('preview');
+    }
+
+    function buildSectionItem(section) {
+      const item = document.createElement('div');
+      item.className = 'section-item';
+
+      const header = document.createElement('div');
+      header.className = 'section-header';
+      header.innerHTML = `
+        <span class="chevron">▶</span>
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <rect x="1" y="1" width="11" height="11" rx="2" stroke="#55556a" stroke-width="1.2" fill="none"/>
+          <rect x="3" y="4" width="7" height="1.2" rx="0.6" fill="#55556a"/>
+          <rect x="3" y="6.5" width="5" height="1.2" rx="0.6" fill="#55556a"/>
+        </svg>
+        <span class="section-label" title="${escHtml(section.label)}">${escHtml(section.label)}</span>
+        <span class="section-badge">${section.childCount}</span>`;
+      header.addEventListener('click', () => item.classList.toggle('open'));
+
+      const children = document.createElement('div');
+      children.className = 'section-children';
+      const childItems = section.children || [];
+      if (!childItems.length) {
+        children.innerHTML = `<div class="child-row"><span style="font-size:11px;color:var(--text-3)">No child elements</span></div>`;
+      } else {
+        children.appendChild(buildChildList(childItems, 0));
+      }
+
+      item.appendChild(header);
+      item.appendChild(children);
+      return item;
+    }
+
+    function buildChildList(children, depth) {
+      const wrapper = document.createElement('div');
+      if (depth > 0) wrapper.className = 'tree-branch';
+
+      (children || []).forEach(child => {
+        if (child.type === 'container') {
+          const hasChildren = child.children && child.children.length > 0;
+          const nestWrap = document.createElement('div');
+          const row = document.createElement('div');
+          row.className = 'child-row' + (hasChildren ? ' child-row-expandable' : '');
+          const chevronHtml = hasChildren ? `<span class="chevron-sm">▶</span>` : `<span style="width:10px;flex-shrink:0;"></span>`;
+          const subHtml = child.childCount > 0 ? `<span class="child-sub">${child.childCount} inside</span>` : '';
+          row.innerHTML = `${chevronHtml}<span class="widget-badge badge-container">Container</span><span class="child-label" title="${escHtml(child.label)}">${escHtml(child.label)}</span>${subHtml}`;
+          nestWrap.appendChild(row);
+
+          if (hasChildren) {
+            const innerList = buildChildList(child.children, depth + 1);
+            innerList.style.display = 'none';
+            nestWrap.appendChild(innerList);
+            row.addEventListener('click', () => {
+              const open = innerList.style.display !== 'none';
+              innerList.style.display = open ? 'none' : 'block';
+              nestWrap.classList.toggle('nest-open', !open);
+              if (!open) innerList.style.animation = 'fadeIn 0.15s ease';
+            });
+          } else if (child.childCount > 0) {
+            const hint = document.createElement('div');
+            hint.className = 'tree-branch depth-cap';
+            hint.textContent = `⋯ ${child.childCount} more nested element${child.childCount !== 1 ? 's' : ''}`;
+            nestWrap.appendChild(hint);
+          }
+          wrapper.appendChild(nestWrap);
+
+        } else {
+          const row = document.createElement('div');
+          row.className = 'child-row';
+          const badgeClass = { 'heading': 'badge-heading', 'image': 'badge-image', 'icon-list': 'badge-iconlist', 'button': 'badge-button', 'icon': 'badge-icon' }[child.type] || 'badge-container';
+          // FIX 6: Escape the fallback so unknown node types can't inject HTML
+          const typeLabel = { 'heading': 'Text', 'image': 'Image', 'icon-list': 'Icon List', 'button': 'Button', 'icon': 'Icon' }[child.type] || escHtml(child.type);
+          row.innerHTML = `<span style="width:10px;flex-shrink:0;"></span><span class="widget-badge ${badgeClass}">${typeLabel}</span><span class="child-label" title="${escHtml(child.label)}">${escHtml(child.label)}</span>`;
+          wrapper.appendChild(row);
+        }
+      });
+      return wrapper;
+    }
+
+    // ----------------------------------------------------------------
+    // Layout renderer — converts Elementor JSON → real HTML/CSS
+    // ----------------------------------------------------------------
+    function renderLayout(msg) {
+      // FIX 5: Guard against malformed JSON from the plugin sandbox
+      let data;
+      try {
+        data = JSON.parse(msg.data);
+      } catch (e) {
+        console.error('[figmantor] Failed to parse render data:', e);
+        showState('preview');
+        return;
+      }
+      const canvas = document.getElementById('render-canvas');
+      canvas.innerHTML = '';
+      canvas.style.transform = 'scale(0.5)';
+      canvas.style.transformOrigin = 'top left';
+
+      document.getElementById('render-title').textContent = msg.title || 'Layout Preview';
+
+      // Reset zoom buttons to 50% default
+      document.querySelectorAll('.zoom-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('zoom-50').classList.add('active');
+
+      (data.content || []).forEach(el => {
+        const wrap = document.createElement('div');
+        wrap.className = 'el-section-wrap';
+
+        // Section label ribbon
+        const label = el.settings?._title;
+        if (label) {
+          const lbl = document.createElement('div');
+          lbl.className = 'el-section-label';
+          lbl.textContent = label;
+          wrap.appendChild(lbl);
+        }
+
+        const rendered = renderElement(el);
+        if (rendered) wrap.appendChild(rendered);
+        canvas.appendChild(wrap);
+      });
+
+      // After render, fix viewport scroll height
+      requestAnimationFrame(() => {
+        const naturalH = canvas.getBoundingClientRect().height / 0.5;
+        canvas.parentElement.style.height = (naturalH * 0.5) + 'px';
+      });
+
+      showState('render');
+    }
+
+    function renderElement(el) {
+      if (!el) return null;
+      if (el.elType === 'container') return renderContainer(el);
+      if (el.elType === 'widget') return renderWidget(el);
+      return null;
+    }
+
+    // ---- Container ----
+    function renderContainer(el) {
+      const s = el.settings || {};
+      const div = document.createElement('div');
+
+      const isGrid = s.container_type === 'grid';
+      div.className = 'el-container ' + (isGrid ? 'el-grid' : 'el-flex');
+
+      if (isGrid) {
+        const cols = s.grid_columns_grid?.size || 1;
+        div.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        if (s.grid_gaps) {
+          div.style.columnGap = (s.grid_gaps.column || '0') + 'px';
+          div.style.rowGap = (s.grid_gaps.row || '0') + 'px';
+        }
+      } else {
+        div.style.flexDirection = s.flex_direction || 'row';
+        div.style.justifyContent = s.flex_justify_content || 'flex-start';
+        div.style.alignItems = s.flex_align_items || 'flex-start';
+        if (s.flex_wrap) {
+          div.style.flexWrap = s.flex_wrap;
+        }
+        if (s.flex_gap) {
+          div.style.columnGap = s.flex_gap.column + 'px';
+          div.style.rowGap = s.flex_gap.row + 'px';
+        }
+      }
+
+      // Padding
+      if (s.padding) {
+        div.style.padding = `${s.padding.top}px ${s.padding.right}px ${s.padding.bottom}px ${s.padding.left}px`;
+      }
+
+      // Background
+      if (s.background_background === 'classic' && s.background_color) {
+        div.style.backgroundColor = safeColor(s.background_color); // FIX 3
+      }
+
+      // Border radius
+      if (s.border_radius) {
+        div.style.borderRadius = `${s.border_radius.top}px ${s.border_radius.right}px ${s.border_radius.bottom}px ${s.border_radius.left}px`;
+      }
+
+      // Width
+      if (s.content_width === 'full') {
+        div.style.width = '100%';
+      } else if (s.boxed_width?.size) {
+        div.style.maxWidth = s.boxed_width.size + 'px';
+        div.style.margin = '0 auto';
+      } else if (s.width?.size) {
+        div.style.width = s.width.size + (s.width.unit || 'px');
+      } else if (s._element_width === '100%') {
+        div.style.width = '100%';
+      } else if (s._element_width === 'initial' && s._element_custom_width?.size) {
+        div.style.width = s._element_custom_width.size + (s._element_custom_width.unit || '%');
+      }
+
+      // Absolute positioning
+      if (s._position === 'absolute') {
+        div.style.position = 'absolute';
+        if (s._offset_x) div.style.left = s._offset_x.size + 'px';
+        if (s._offset_y) div.style.top = s._offset_y.size + 'px';
+      }
+
+      // Children
+      (el.elements || []).forEach(child => {
+        const childEl = renderElement(child);
+        if (childEl) div.appendChild(childEl);
+      });
+
+      return div;
+    }
+
+    // ---- Widget dispatcher ----
+    function renderWidget(el) {
+      switch (el.widgetType) {
+        case 'heading': return renderHeading(el);
+        case 'image': return renderImage(el);
+        case 'icon-list': return renderIconList(el);
+        case 'button': return renderButton(el);
+        case 'icon': return renderIcon(el);
+        default: return renderUnknownWidget(el);
+      }
+    }
+
+    // ---- Heading / Text widget ----
+    function renderHeading(el) {
+      const s = el.settings || {};
+      const tag = s.header_size || 'h2';
+      const node = document.createElement(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'].includes(tag) ? tag : 'p');
+      node.className = 'el-widget-heading';
+      node.textContent = s.title || '';
+
+      if (s.title_color) node.style.color = safeColor(s.title_color); // FIX 3
+      if (s.typography_font_family) node.style.fontFamily = `'${safeCSSString(s.typography_font_family)}', sans-serif`; // FIX 2
+      if (s.typography_font_size?.size) node.style.fontSize = s.typography_font_size.size + 'px';
+      if (s.typography_font_weight) node.style.fontWeight = s.typography_font_weight;
+      if (s.typography_line_height?.size) {
+        const lh = s.typography_line_height;
+        node.style.lineHeight = lh.size + (lh.unit === 'em' ? 'em' : 'px');
+      }
+      if (s.typography_letter_spacing?.size) {
+        node.style.letterSpacing = s.typography_letter_spacing.size + 'em';
+      }
+
+      // Width handling
+      if (s._element_width === '100%') {
+        node.style.width = '100%';
+      } else if (s._element_width === 'initial' && s._element_custom_width?.size) {
+        node.style.width = s._element_custom_width.size + (s._element_custom_width.unit || '%');
+      }
+
+      // Absolute positioning
+      if (s._position === 'absolute') {
+        node.style.position = 'absolute';
+        if (s._offset_x) node.style.left = s._offset_x.size + 'px';
+        if (s._offset_y) node.style.top = s._offset_y.size + 'px';
+      }
+
+      return node;
+    }
+
+    // ---- Image widget ----
+    function renderImage(el) {
+      const s = el.settings || {};
+      const wrap = document.createElement('div');
+      wrap.className = 'el-widget-image';
+
+      if (s._position === 'absolute') {
+        wrap.style.position = 'absolute';
+        if (s._offset_x) wrap.style.left = s._offset_x.size + 'px';
+        if (s._offset_y) wrap.style.top = s._offset_y.size + 'px';
+      }
+
+      const placeholder = document.createElement('div');
+      placeholder.className = 'el-image-placeholder';
+
+      if (s.image_border_radius?.top) {
+        placeholder.style.borderRadius = s.image_border_radius.top + 'px';
+      }
+
+      // Try to use the actual image URL (placehold.co)
+      const url = s.image?.url;
+      if (url && isSafeImageUrl(url)) { // FIX 7: require https:
+        const img = document.createElement('img');
+        img.src = url;
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        if (s.image_border_radius?.top) img.style.borderRadius = s.image_border_radius.top + 'px';
+        wrap.appendChild(img);
+      } else {
+        placeholder.innerHTML = `
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <rect x="3" y="8" width="34" height="24" rx="3" stroke="#8899aa" stroke-width="2" fill="none"/>
+            <circle cx="14" cy="17" r="3.5" stroke="#8899aa" stroke-width="2" fill="none"/>
+            <path d="M3 28l9-8 7 6 5-4 13 10" stroke="#8899aa" stroke-width="2" stroke-linejoin="round" fill="none"/>
+          </svg>`;
+        wrap.appendChild(placeholder);
+      }
+
+      return wrap;
+    }
+
+    // ---- Icon List widget ----
+    function renderIconList(el) {
+      const s = el.settings || {};
+      const wrap = document.createElement('div');
+      wrap.className = 'el-widget-iconlist';
+
+      const ul = document.createElement('ul');
+      ul.className = 'el-iconlist-ul';
+
+      const items = s.icon_list || [];
+      items.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'el-iconlist-li';
+
+        const dot = document.createElement('span');
+        dot.className = 'el-iconlist-dot';
+        if (s.icon_color) dot.style.background = safeColor(s.icon_color); // FIX 3
+
+        const txt = document.createElement('span');
+        txt.textContent = item.text || '';
+        if (s.text_color) txt.style.color = safeColor(s.text_color); // FIX 3
+        if (s.typography_font_family) txt.style.fontFamily = `'${safeCSSString(s.typography_font_family)}', sans-serif`; // FIX 2
+        if (s.typography_font_size?.size) txt.style.fontSize = s.typography_font_size.size + 'px';
+        if (s.typography_font_weight) txt.style.fontWeight = s.typography_font_weight;
+
+        li.appendChild(dot);
+        li.appendChild(txt);
+        ul.appendChild(li);
+      });
+
+      wrap.appendChild(ul);
+      return wrap;
+    }
+
+    // ---- Button widget ----
+    function renderButton(el) {
+      const s = el.settings || {};
+      const wrap = document.createElement('div');
+      wrap.className = 'el-widget-button';
+
+      if (s.content_align === 'center') wrap.style.justifyContent = 'center';
+      else if (s.content_align === 'right') wrap.style.justifyContent = 'flex-end';
+      else if (s.content_align === 'justify') {
+        wrap.style.justifyContent = 'stretch';
+        wrap.style.width = '100%';
+      } else wrap.style.justifyContent = 'flex-start';
+
+      // Width
+      if (s._element_width === '100%') {
+        wrap.style.width = '100%';
+      } else if (s._element_width === 'initial' && s._element_custom_width?.size) {
+        wrap.style.width = s._element_custom_width.size + (s._element_custom_width.unit || '%');
+      }
+      wrap.style.flex = '0 0 auto';
+
+      const btn = document.createElement('div');
+      btn.className = 'el-button-inner';
+      btn.textContent = s.text || 'Click here';
+
+      if (s.background_color) btn.style.backgroundColor = safeColor(s.background_color); // FIX 3
+      if (s.button_text_color) btn.style.color = safeColor(s.button_text_color); // FIX 3
+
+      if (s.typography_font_family) btn.style.fontFamily = `'${safeCSSString(s.typography_font_family)}', sans-serif`; // FIX 2
+      if (s.typography_font_size?.size) btn.style.fontSize = s.typography_font_size.size + 'px';
+      if (s.typography_font_weight) btn.style.fontWeight = s.typography_font_weight;
+
+      if (s.border_radius?.top) {
+        btn.style.borderRadius = `${s.border_radius.top}px ${s.border_radius.right}px ${s.border_radius.bottom}px ${s.border_radius.left}px`;
+      }
+
+      if (s.border_border === 'solid') {
+        btn.style.borderStyle = 'solid';
+        if (s.border_color) btn.style.borderColor = safeColor(s.border_color); // FIX 3
+        if (s.border_width?.top) {
+          btn.style.borderWidth = `${s.border_width.top}px ${s.border_width.right}px ${s.border_width.bottom}px ${s.border_width.left}px`;
+        }
+      }
+
+      if (s.text_padding?.top) {
+        btn.style.padding = `${s.text_padding.top}px ${s.text_padding.right}px ${s.text_padding.bottom}px ${s.text_padding.left}px`;
+      } else {
+        btn.style.padding = '12px 24px';
+      }
+
+      if (s.content_align === 'justify') btn.style.width = '100%';
+
+      wrap.appendChild(btn);
+      return wrap;
+    }
+
+    function renderIcon(el) {
+      const s = el.settings || {};
+      const wrap = document.createElement('div');
+      wrap.className = 'el-widget-icon';
+
+      const align = s.align || 'center';
+      if (align === 'left') wrap.style.justifyContent = 'flex-start';
+      if (align === 'right') wrap.style.justifyContent = 'flex-end';
+
+      if (s._position === 'absolute') {
+        wrap.style.position = 'absolute';
+        if (s._offset_x) wrap.style.left = s._offset_x.size + 'px';
+        if (s._offset_y) wrap.style.top = s._offset_y.size + 'px';
+      }
+
+      const icon = document.createElement('div');
+      icon.className = 'el-icon-inner';
+
+      if (s.primary_color) icon.style.color = safeColor(s.primary_color); // FIX 3
+      if (s.size?.size) {
+        icon.style.width = s.size.size + 'px';
+        icon.style.height = s.size.size + 'px';
+        icon.style.fontSize = s.size.size + 'px';
+      } else {
+        icon.style.width = '24px';
+        icon.style.height = '24px';
+        icon.style.fontSize = '24px';
+      }
+
+      icon.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>`;
+
+      wrap.appendChild(icon);
+      return wrap;
+    }
+
+    // ---- Unknown widget fallback ----
+    function renderUnknownWidget(el) {
+      const s = el.settings || {};
+      const div = document.createElement('div');
+      div.style.cssText = `
+        background: rgba(99,102,241,0.06);
+        border: 1px dashed rgba(99,102,241,0.3);
+        border-radius: 4px;
+        padding: 8px 12px;
+        font-size: 11px;
+        color: rgba(129,140,248,0.8);
+        font-family: 'Inter', sans-serif;
+      `;
+      div.textContent = `${el.widgetType || 'widget'}`;
+      return div;
+    }
+
+    // ----------------------------------------------------------------
+    // Util
+    // ----------------------------------------------------------------
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // FIX 2: Strips characters that could break out of a CSS string context
+    // (e.g. a Figma font name containing a single-quote in fontFamily: '...')
+    function safeCSSString(str) {
+      return String(str).replace(/['";\\]/g, '');
+    }
+
+    // FIX 3: Validates that a value is a CSS hex color before applying it to a style property.
+    // rgbaToHex() in code.ts always produces #rrggbb — this guards against future changes.
+    function safeColor(val) {
+      if (!val) return '';
+      return /^#[0-9a-fA-F]{3,8}$/.test(String(val)) ? val : '';
+    }
+
+    // FIX 7: Ensures an image URL uses HTTPS before assigning it to img.src
+    function isSafeImageUrl(url) {
+      try {
+        return new URL(url).protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }
+  </script>
+
+</body>
+
+</html>

@@ -1,0 +1,84 @@
+/* ================================================================
+   Design tokens — migrated from legacy ui.html
+================================================================ */
+:root {
+  --bg: #0e0e10;
+  --surface: #18181d;
+  --surface-2: #222230;
+  --surface-3: #2a2a3a;
+  --border: #2b2b3a;
+  --primary: #92003B;
+  --primary-h: #b0004a;
+  --accent: #e55a87;
+  --text-1: #f0f0f4;
+  --text-2: #8b8b9e;
+  --text-3: #55556a;
+  --warn: #f59e0b;
+  --warn-bg: rgba(245, 158, 11, 0.08);
+  --warn-border: rgba(245, 158, 11, 0.22);
+  --success: #22c55e;
+  --info: #60a5fa;
+
+  /* Sidebar */
+  --sidebar-width: 260px;
+
+  /* Toolbar */
+  --toolbar-height: 44px;
+
+  /* Status bar */
+  --statusbar-height: 28px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text-1);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+}
+
+/* Utility classes */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

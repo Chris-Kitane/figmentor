@@ -87,6 +87,25 @@ figma.ui.onmessage = msg => {
   }
 
   // ---------------------------------------------------------------
+  // EDIT: Build full JSON and send to UI to enter builder mode
+  // ---------------------------------------------------------------
+  if (msg.type === 'edit') {
+    const selection = figma.currentPage.selection;
+    if (selection.length === 0) {
+      figma.notify('Please select a frame or element on the canvas first!');
+      return;
+    }
+    const result = buildExportPayload();
+    if (!result) return;
+    figma.ui.postMessage({
+      type: 'edit-data',
+      data: JSON.stringify(result.data, null, 2),
+      title: result.title
+    });
+    return;
+  }
+
+  // ---------------------------------------------------------------
   // NOTIFY: Show toast messages from UI
   // ---------------------------------------------------------------
   if (msg.type === 'notify') {
