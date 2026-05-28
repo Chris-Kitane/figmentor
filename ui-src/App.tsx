@@ -1,5 +1,21 @@
+import { useEffect, useState } from 'preact/hooks';
 import { appState, appTitle } from './state/appState';
+import {
+  loadDocument,
+  document$,
+  isDirty$,
+  type ElementorDocument,
+} from './editor/EditorState';
+import {
+  startAutoSave,
+  onSaveAcknowledged,
+  onLoadStateResult,
+  requestLoadState,
+} from './editor/persistence';
 import styles from './App.module.css';
+
+// Start auto-save watcher (runs once when module loads)
+startAutoSave();
 
 export function App() {
   return (
@@ -7,11 +23,71 @@ export function App() {
       {appState.value === 'idle' && <IdleScreen />}
       {appState.value === 'loading' && <LoadingScreen />}
       {appState.value === 'builder' && <BuilderScreen />}
+      <IpcHandler />
     </div>
   );
 }
 
-// ---- Idle screen (placeholder — will be built out in Phase 5) ----
+// ─── IPC Message Handler ──────────────────────────────────────────────────────
+
+/** 
+ * Handles all messages from code.ts (Figma main thread).
+ * Mounted once as a side-effect component — doesn't render anything.
+ */
+function IpcHandler() {
+  useEffect(() => {
+    // On mount: ask code.ts if there's a saved session
+    requestLoadState();
+
+    const handler = (event: MessageEvent) => {
+      const msg = event.data?.pluginMessage;
+      if (!msg) return;
+
+      switch (msg.type) {
+        // A fresh Figma analysis arrived → load into editor
+        case 'edit-data': {
+          try {
+            const doc: ElementorDocument = JSON.parse(msg.data);
+            loadDocument(doc);
+            appTitle.value = msg.title || doc.title || 'Untitled';
+            appState.value = 'builder';
+          } catch (e) {
+            console.error('[figmantor] Failed to parse edit-data:', e);
+            appState.value = 'idle';
+          }
+          break;
+        }
+
+        // Saved session response from clientStorage
+        case 'load-state-result': {
+          // Only restore if we're still on the idle screen (don't clobber a fresh analysis)
+          if (appState.value === 'idle' && msg.data) {
+            const restored = onLoadStateResult(msg.data);
+            if (restored && document$.value) {
+              appTitle.value = document$.value.title || 'Untitled';
+              appState.value = 'builder';
+            }
+          }
+          break;
+        }
+
+        // Auto-save was acknowledged by code.ts
+        case 'save-ack': {
+          onSaveAcknowledged();
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  return null;
+}
+
+// ─── Idle Screen ──────────────────────────────────────────────────────────────
+
 function IdleScreen() {
   function handleAnalyze() {
     appState.value = 'loading';
@@ -43,7 +119,8 @@ function IdleScreen() {
   );
 }
 
-// ---- Loading screen ----
+// ─── Loading Screen ───────────────────────────────────────────────────────────
+
 function LoadingScreen() {
   return (
     <div class={styles.loading}>
@@ -53,28 +130,68 @@ function LoadingScreen() {
   );
 }
 
-// ---- Builder screen (placeholder — will be fleshed out in Phase 5) ----
+// ─── Builder Screen (placeholder — fleshed out in Phase 5) ───────────────────
+
 function BuilderScreen() {
+  const [hasSaved, setHasSaved] = useState(false);
+
+  function handleBackToIdle() {
+    if (isDirty$.value) {
+      const ok = window.confirm('You have unsaved changes. Start fresh from Figma?');
+      if (!ok) return;
+    }
+    appState.value = 'idle';
+  }
+
+  function handleExport() {
+    const doc = document$.value;
+    if (!doc) return;
+    const json = JSON.stringify(doc, null, 2);
+    const title = doc.title || 'elementor-export';
+    parent.postMessage({
+      pluginMessage: { type: 'download', data: json, filename: title }
+    }, '*');
+  }
+
+  // Show a transient "Saved" indicator when isDirty flips to false
+  useEffect(() => {
+    const cleanup = isDirty$.subscribe((dirty) => {
+      if (!dirty) {
+        setHasSaved(true);
+        const t = setTimeout(() => setHasSaved(false), 2000);
+        return () => clearTimeout(t);
+      }
+    });
+    return cleanup;
+  }, []);
+
   return (
     <div class={styles.builder}>
-      <div class={styles.builderPlaceholder}>
-        <span>🚧 Builder coming in Phase 2–5</span>
+      {/* Placeholder toolbar */}
+      <div class={styles.builderToolbar}>
+        <button class={styles.ghostBtn} onClick={handleBackToIdle}>← Back</button>
         <span class={styles.builderTitle}>{appTitle.value}</span>
+        <div class={styles.toolbarRight}>
+          {hasSaved && <span class={styles.savedBadge}>✓ Saved</span>}
+          {isDirty$.value && <span class={styles.dirtyBadge}>● Unsaved</span>}
+          <button class={styles.exportBtn} onClick={handleExport}>Download →</button>
+        </div>
+      </div>
+
+      {/* Placeholder canvas area */}
+      <div class={styles.builderBody}>
+        <div class={styles.builderPlaceholder}>
+          <span class={styles.placeholderIcon}>🏗️</span>
+          <span class={styles.placeholderTitle}>Visual Builder</span>
+          <span class={styles.placeholderSub}>
+            Canvas + Sidebar coming in Phase 2–3
+          </span>
+          <div class={styles.docStats}>
+            <span>📄 {appTitle.value}</span>
+            <span>📦 {document$.value?.content.length ?? 0} sections</span>
+          </div>
+        </div>
       </div>
     </div>
   );
-}
-
-// ---- IPC message handler — runs once on mount ----
-if (typeof window !== 'undefined') {
-  window.onmessage = (event: MessageEvent) => {
-    const msg = event.data?.pluginMessage;
-    if (!msg) return;
-
-    if (msg.type === 'edit-data') {
-      appTitle.value = msg.title || 'Untitled';
-      // TODO: Phase 1 — load into EditorState
-      appState.value = 'builder';
-    }
-  };
 }

@@ -112,16 +112,27 @@ figma.ui.onmessage = msg => {
     figma.notify(msg.msg, { error: msg.error });
     return;
   }
+
   // ---------------------------------------------------------------
-  // RENDER: Build full JSON and send to UI for CSS rendering
+  // PERSISTENCE: Save & load editor state via figma.clientStorage
   // ---------------------------------------------------------------
-  if (msg.type === 'render') {
-    const result = buildExportPayload();
-    if (!result) return;
-    figma.ui.postMessage({
-      type: 'render-data',
-      data: JSON.stringify(result.data),
-      title: result.title
+  if (msg.type === 'save-state') {
+    figma.clientStorage.setAsync('figmantor-editor-state', msg.data).then(() => {
+      figma.ui.postMessage({ type: 'save-ack' });
+    });
+    return;
+  }
+
+  if (msg.type === 'load-state') {
+    figma.clientStorage.getAsync('figmantor-editor-state').then((data) => {
+      figma.ui.postMessage({ type: 'load-state-result', data: data ?? null });
+    });
+    return;
+  }
+
+  if (msg.type === 'clear-state') {
+    figma.clientStorage.deleteAsync('figmantor-editor-state').then(() => {
+      figma.ui.postMessage({ type: 'clear-state-ack' });
     });
     return;
   }

@@ -5,7 +5,7 @@
   "main": "code.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "build:ui": "vite build && move /Y index.html ui.html",
+    "build:ui": "vite build && powershell -Command \"Remove-Item -Force ui.html -ErrorAction SilentlyContinue; Rename-Item index.html ui.html\"",
     "build:all": "npm run build && npm run build:ui",
     "dev:plugin": "tsc -p tsconfig.json --watch",
     "dev:ui": "vite build --watch --config vite.config.ts",
