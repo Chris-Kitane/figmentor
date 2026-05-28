@@ -12,6 +12,7 @@ import {
   onLoadStateResult,
   requestLoadState,
 } from './editor/persistence';
+import { Canvas } from './canvas/Canvas';
 import styles from './App.module.css';
 
 // Start auto-save watcher (runs once when module loads)
@@ -178,17 +179,12 @@ function BuilderScreen() {
         </div>
       </div>
 
-      {/* Placeholder canvas area */}
+      {/* Main workspace */}
       <div class={styles.builderBody}>
-        <div class={styles.builderPlaceholder}>
-          <span class={styles.placeholderIcon}>🏗️</span>
-          <span class={styles.placeholderTitle}>Visual Builder</span>
-          <span class={styles.placeholderSub}>
-            Canvas + Sidebar coming in Phase 2–3
-          </span>
-          <div class={styles.docStats}>
-            <span>📄 {appTitle.value}</span>
-            <span>📦 {document$.value?.content.length ?? 0} sections</span>
+        <Canvas />
+        <div style={{ width: '260px', background: 'var(--surface-2)', borderLeft: '1px solid var(--border)' }}>
+          <div style={{ padding: '20px', color: 'var(--text-2)', fontSize: '13px', textAlign: 'center' }}>
+            Sidebar coming in Phase 3
           </div>
         </div>
       </div>
